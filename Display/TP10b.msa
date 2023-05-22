@@ -1,0 +1,156 @@
+***************** 
+*       TP10    * 
+*****************
+
+	p68h11
+	lstexp+
+        lstmac+
+            
+*****************
+*  constantes   *
+*****************
+DDRC    equ 	$1007 		;data direction register for C
+PIOC    equ 	$1002 		;for strobe B assertion change
+PORTCL  equ 	$1005   	;port C latched
+PORTB   equ 	$1004  		;port B
+DIREC	equ 	1		;si es 1 va de derecha a izquierda, 0 va de izquierda a derecha
+	
+	if	DIREC=0
+D	equ	3
+	else
+D	equ	0
+
+	endif
+
+
+***************** 
+*     Macros    * 
+*****************
+           
+	macro   %bckp		;ocupa 6 bytes en stack
+        psha			;esta macro hace un backup de todos los registros
+        pshb
+        pshx
+        pshy
+        endmac
+            
+        macro   %bckp2
+        puly			;esta macro recupera todos los registros del stack
+        pulx
+        pulb
+        pula
+        endmac
+	
+	macro	%change1	;esta macro incrementa x cuando DIREC esta en 0 y lo decrementa cuando esta en 1
+	if	DIREC=0
+	inx			
+	else
+	dex
+	endif
+	endmac
+
+	macro	%change2	;esta macro carga en x la posicion del inicio de la palabra cuando DIREC esta en 0 y la posicion donde termina la palabra cuando DIREC esta en 1
+	if	DIREC=0
+	ldx	#inicio
+	else
+	ldx	#inicio2-4
+	endif
+	endmac
+
+*****************
+*     MAIN      *
+*****************
+
+	org	$2000
+	lds	#stackp		;inicio el stackp
+	%bckp			
+	jsr	initdis		;jmp a la subrutina para inicializar el display
+	%bckp2
+pala	%change2		;utiliza x como puntero del comienzo/final de la palabra
+	%bckp			
+	jsr	pasar		;jmp a la subrutina para pasar la palabra por el display
+	%bckp2
+	bra	pala		;loop para que siga pasando la palabra
+
+*****************
+*  INITDIS      *
+*****************
+initdis	equ	*
+	psha
+	ldaa 	#$FF 		;set for output
+	staa 	DDRC       	;C output
+	ldaa 	PIOC       	;get current value
+	anda 	#$FE       	;reset bit 0 to 0
+	staa 	PIOC       	;send it out
+	pula
+	rts
+
+**************************************
+*Outchar: ACCA: Carácter a enviar
+*		ACCB: Posición (0-3)
+**************************************
+outchar	equ	*
+	stab PORTCL    		;set the position 
+	staa PORTB      	;set the character
+	rts
+*********************************************************************************************************
+*						Subrutina						*
+*-esta subrutina pasa una palabra por un display con un intervalo de 0,5 seg entre letra y letra	*
+*-recibe por IX la direccion de inicio de la palabra y en AccA el sentido que quiere pasar la palabra	*
+*********************************************************************************************************
+	ORG     $3000
+
+pasar	equ 	*
+loop	ldaa	0,x		;esta subrutina agarra los primeros 4 caracteres de la palabra y los pone en la posiciones 0,1,2,3 del display respectivamente
+	ldab	#3
+	jsr	outchar
+	ldaa	1,x
+	ldab	#2
+	jsr	outchar
+	ldaa	2,x
+	ldab	#1
+	jsr	outchar
+	ldaa	3,x
+	ldab	#0
+	jsr	outchar
+	%change1
+	jsr	time		;crea un delay de 0.5 segundos
+	ldaa	D,x		;carga en A el final/comienzo de la palabra y lo compara con $00
+	cmpa	#00
+	bne 	loop		;si no es igual, sigue cargando los siguientes valores y si es igual, significa que termino de cargar toda la palabra
+	rts
+	
+time	equ	*		;esta subrutina hace un delay de 0.5 segundos
+	pshx			-backup de x
+	pshy			-backup de y
+	ldx	#41666		-cargar en x 41666 decimal, sera el primer contador
+loop1	ldy	#2		-cargar en y 2 decimal, sera el segundo contador
+loop2	dey			-decrementar el contador
+	bne	loop2		-si y no es 0, vuelve a decrementar y
+	dex			-decrementar x
+	bne	loop1		-si x no es 0, vuelve a empezar el loop
+	ldy	#$0000		-cargo y con el valor $0000
+	ldy	$0000		-cargo y con el valor en la posicion de memoria $1000
+	puly			-recupera y del backup
+	pulx			-recupera x del backup
+	rts			-regresa al main
+
+
+*********************************
+*	STACK			*
+*********************************
+	org	$3500
+stack	rmb	20	
+stackp	equ	*-1
+
+
+*********************************
+*	constantes		*
+*********************************
+	org	$4500
+	fcb	$0
+inicio	fcc	'    '
+	fcc	'BIENVENIDOS A INTROCOM'
+	fcc	'    '
+inicio2	fcb	$0
+	end

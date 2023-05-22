@@ -1,0 +1,42 @@
+*******************
+*  Ejercicio 5-a  *
+*******************
+	p68h11
+*************************************************************************
+* 					MAIN  				*
+* el programa tendrá como finalidad hacer un contador del 		*
+*0 al 15 con su representación en binario mediante un sistema de leds 	*
+*************************************************************************
+	org	$2000
+	clra			-me aseguro de que acca esté vacío
+iloop	staa	$1000		-ponemos el nro cargado en acca en las leds
+	jsr	time		-dejamos pasar 0,5 segundos
+	adda	#00001000b	-sumamos 8 para representar en binario el número siguiente
+	bra	iloop
+
+*********************************
+*    Subrutina			*    
+*********************************
+	org	$5000		
+time	equ	*		-subrutina time, copiada
+	pshx
+	pshy
+	ldx	#41666
+loop1	ldy	#2
+loop2	dey
+	bne	loop2
+	dex
+	bne	loop1
+	ldy	#$0000
+	ldy	$0000
+puly
+	pulx
+	rts
+
+***********************************
+*    STACK			*
+***********************************
+	org	$3000
+stack	rmb	10    
+stackp	equ	*-1
+	END

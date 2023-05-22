@@ -1,0 +1,49 @@
+***************** 
+*  Ejercicio 1  * 
+*****************
+	p68h11
+*****************
+*  constantes   *
+*****************
+
+*****************
+*     MAIN      *
+*****************
+	org	$2000
+	lds	#stackp	
+	ldx	#string
+	jsr	sterlen
+
+	swi
+
+
+*********************************
+*	Subrutina Sterlen		  	*	
+*********************************
+	org	$5000
+sterlen	equ	*
+	pshb
+	pshx
+loop	ldab	0,x
+	beq	fin
+	inca	
+	inx
+	bra	loop
+fin	pulx
+	pulb
+	rts 	
+
+*********************************
+*	STACK			*
+*********************************
+	org	$3000
+stack	rmb	20	
+stackp	equ	*-1
+
+*********************************
+*	constantes		*
+*********************************
+	org	$4000
+string	fcc	'hola gente buena'
+	fcb	0
+	END

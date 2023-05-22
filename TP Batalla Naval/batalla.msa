@@ -1,0 +1,1882 @@
+*****************
+* BATALLA NAVAL * 
+*****************
+
+	p68h11
+	lstexp+
+    lstmac+
+
+
+******* Ports ***************************
+DDRC 	equ 	$1007 		//data direction register for C
+PIOC 	equ 	$1002 		//for strobe B assertion change
+PORTCL 	equ 	$1005 		//port C latched
+PORTB 	equ 	$1004 		//port B
+PORTC 	equ 	$1003 		//rows
+******* Cols and Row Ports **************
+ROWS 	equ 	PORTC 		//outputs
+COLS 	equ 	PORTCL 		//inputs
+***** Row Masks *************************
+FIL0 	equ 	00001110b 	//mascaras para manejo de filas
+FIL1 	equ 	00001101b
+FIL2 	equ 	00001011b
+FIL3 	equ 	00000111b
+****** Keyboard Mask ********************
+
+*************************
+*     CONSTANTES		* 
+*************************
+
+count4	equ	4
+post3	equ	3
+
+************************
+arsize	equ	elsize*n
+elsize	equ	1	
+keysize	equ	1
+tecsize	equ	keysize*m
+m		equ	4
+n		equ	6
+code	equ	0
+I		equ	2
+D		equ	3
+Ar		equ	0
+Ab		equ	1
+npos	equ	1
+cc		equ	6
+pnuf	equ	$1E
+rc6		equ	5
+rc1		equ	0
+************************
+stsub	equ	01001100b
+stcar	equ	10001111b
+negro	equ	0
+rojo	equ	00110000b
+colcd	equ	$5EFF
+btmp	equ	$5F00
+btmpf	equ	$5F23
+
+p		equ	$70
+q		equ	$71
+r		equ	$72
+t		equ	$74
+sub		equ	01000000b
+carg	equ	10000000b
+agua	equ	00000011b
+amll	equ	00111100b
+negr	equ	11000000b
+
+START	equ	0
+P1TURN	equ	1
+P2TURN	equ	2
+P1WIN	equ	3
+P2WIN	equ	4
+SINKSUB	equ	5
+SINKLD	equ	6
+HITLD	equ	7
+MISS	equ	8
+E1		equ	14
+E2		equ	11
+E3		equ	12
+E4		equ	13
+E5		equ	28
+SUB		equ	15
+BAT		equ	16
+LEND	equ	17
+BEGIN	equ	18
+XX		equ	9
+
+toascii	equ	$30
+showp	equ	$50
+n1		equ	$31
+n2		equ	$32
+
+dif1	equ	btmp-array	
+dif2	equ	btmp-array2
+
+***************** 
+*     MACROS	* 
+*****************
+           
+macro   %bckp		//ocupa 6 bytes en stack
+		psha			//esta macro hace un backup de los registros
+		pshb
+		pshx
+		pshy
+		endmac
+
+		macro   %rbckp
+		puly			//esta macro recupera los registros del stack
+		pulx
+		pulb
+		pula
+		endmac
+
+macro	%gettecla
+		ldab	#\0
+		staa	PORTC
+		ldaa	PORTC
+		anda	#$F0
+		cmpa	#$F0
+		bne		find
+		endmac
+
+
+*****************
+*     MAIN      *
+*****************
+
+		org	$2000
+main	equ	*
+		lds	#stackp		//inicio el stack
+		jsr	initdis
+comienz	jsr	clrary		//resetea todos los tableros
+		jsr	start
+		ldaa	#0
+		staa	player
+player2	psha
+		ldaa	#SUB
+		jsr	display		//mensaje comienzo carga submarinos
+		pula
+		jsr	clrvars		//borramos todas las variables
+		jsr	clrdis
+		ldaa	#1
+		staa	type		//tipo de barco
+		ldaa	#4		
+		staa	cont		//contador de submarinos
+nxt2	ldaa	#2
+		staa	cont2		//contador de fila o columna
+nxt		ldaa	#1
+		staa	ferr		//flag de error
+		jsr	barrido
+		jsr	time
+		jsr	asks
+		ldaa	ferr
+		beq	nxt2		//si es un error volver a pollear
+		dec	cont2
+		bne	nxt		//si ya se tiene fila y columna, modificar tablero
+		jsr	p1
+		ldaa	ferr
+		beq	nxt2		//si hay error de allready pressed
+		dec	cont
+		bne	nxt2		//siguiente submarino
+		dec	type
+		ldaa	#2		
+		staa	cont		//contador de cargueros
+		psha
+		ldaa	#BAT
+		jsr	display		//mensaje de carga de cargueros e instrucciones
+		pula
+nxt3	ldaa	#3
+		staa	cont2		//contador de fila, columna o direccion
+nxt4	ldaa	#1
+		staa	ferr		//flag de error
+		jsr	barrido
+		jsr	time
+		jsr	asks
+		ldaa	especia		//nos fijamos si el caso especial en que se quiere
+		cmpa	#1		//deshacer durante la carga del ultimo submarino
+		bne	noesp
+		dec	especia
+		bra	nxt2
+noesp	ldaa	ferr
+		beq	nxt3		//si es un error volver a pollear
+		dec	cont2
+		bne	nxt4		//si se tiene fila, colu y dire, modificar tablero
+		jsr	p1
+		%bckp
+		jsr	chrg		//guardamos las vars necesarias para la ej del juego
+		%rbckp
+		ldaa	ferr
+		beq	nxt3
+		dec	cont
+		bne	nxt3
+		psha
+		ldaa	#LEND
+		jsr	display		//termino carga del jugador
+		pula
+otrav	jsr	barrido		//termino la carga del jugador
+		jsr	time
+		jsr	endplay		//se espera que se presione p2 o fire dependiendo
+		ldaa	lukag		//del player
+		cmpa	#1
+		beq	otrav
+		cmpa	#2		//si se presiona undo en el ultimo carg, se vuelve a cargar
+		beq	nxt3
+		jsr	blacky		//se vacia el display y el tablero del jugador
+		inc	player
+		ldaa	player
+		cmpa	#1
+		bne	gogame		//si se trata del primer jugador, reiniciamos el programa
+		jmp	player2
+gogame	psha
+		ldaa	#BEGIN
+		jsr	display		//juego acaba de empezar
+		pula
+		jsr	vacxg
+		ldaa	#36		//aca empieza el juego en si
+		staa	count
+		ldaa	#2
+		staa	p1carg1
+		staa	p1carg2
+		staa	p2carg1
+		staa	p2carg2
+		jsr 	game
+maine	bra	maine		
+	
+
+*********************************
+*	SUBRUTINAS					*
+*********************************
+
+*********************************************************************************
+*	 		Inicializa display (y teclado)		    							*
+*********************************************************************************
+
+initdis	equ 	*
+		psha
+		ldaa 	#$0F 		//set for input/output
+		staa 	DDRC 		//C output
+		ldaa 	PIOC 		//get current value
+		anda 	#$FE 		//reset bit 0 to 0
+		staa 	PIOC 		//send it out
+		pula
+		rts
+
+*********************************************************************************
+*					Outchar														*
+*ACCA: Caracter a enviar														*
+*ACCB: Posicion (0-3)															*
+*********************************************************************************
+
+outchar	equ 	*
+		stab 	PORTCL 		//set the position
+		staa 	PORTB 		//set the character
+		rts
+
+*********************************************************************************
+*   			 	 barrido   			   										*
+*-esta subrutina busca las filas y columnas de las teclas presionadas			*
+*-devuelve la fila y columna en las variables 'filas' y 'cols'					*
+*********************************************************************************
+barrido	equ	*
+		ldaa	#FIL0		//busca la fila que esta presionada
+		%gettecla	0
+		ldaa	#FIL1
+		%gettecla	1
+		ldaa	#FIL2
+		%gettecla	2
+		ldaa	#FIL3
+		%gettecla	3
+		bra	barrido		//si no se presiono ninguno, empieza de nuevo
+find	clc			//borra el carry
+		stab	fil		//guardo la fila en var 'filas'
+		ldab	#post3		//cargo un 3		
+		stab	col		//lo guardo en var 'cols'
+		ldab	#count4		//creo un contador de 4
+kgoing	asla			//shift a la izquiera
+		bcc	gotcol		//si el carry es 0, encontro la col
+		dec	col		//decremento 'cols'
+		decb			//decremento contador
+		bne	kgoing		//si no es cero,salto a kgoing
+gotcol	rts
+
+
+
+*********************************************************************************
+*   			  	clrdis														*
+*********************************************************************************
+
+clrdis	equ	*		//borra el display
+		ldx	#btmp
+		ldaa	#negro
+loop1	staa	0,x
+		inx
+		cpx	#btmpf
+		bne	loop1
+		staa	0,x
+		rts
+
+*********************************************************************************
+*   			  		endplay													*
+*espera que toquen la tecla p2 o fire dependiendo, si no se toca, lukag vale 1	*
+*********************************************************************************
+
+endplay	equ	*
+		pshx
+		ldaa	#0
+		staa	lukag		//reinicio el flag
+		ldaa	fil
+		ldab	col
+		cmpa	#3
+		bne	notrst
+		cmpb	#3
+		bne	notrst
+		jsr	undo		//si se toca undo en el ultimo carguero
+		ldaa	#1
+		staa	cont		//ponemos el contador de cargueros en 1 nuevamente
+		ldaa	#2
+		staa	lukag		//caso especial, lukag vale 2 para usarlo como flag
+		pulx
+		rts
+notrst	ldx	player		//si es p1 se debe tocar p2, sino fire
+		beq	p1111		//es player 1
+		cmpa	#2
+		bne	lookag
+		cmpb	#3
+		bne	lookag		//las coordenadas de fire son 2,3
+		pulx
+		rts			//se presiono fire
+p1111	cmpa	#1
+		bne	lookag
+		cmpb	#3
+		bne	lookag		//las coordenadas de p2 son 1,3
+		pulx
+		rts			//se presiono p2
+lookag	inc	lukag
+		pulx
+		rts
+
+*********************************************************************************
+*   			  		asks													*
+*recibe las coordenadas de las teclas y comprueba si es una tecla valida		*
+*********************************************************************************
+
+asks	equ	*		//se toman decisiones a partir de la tecla presionada
+		jsr	cmp		//se comprueba que no se toquen teclas no deseadas
+		ldaa	error
+		cmpa	#1
+		bne	sigue
+		jsr	errtec		//si la tecla no es deseada, se termina la carga
+		rts
+sigue	jsr	find1
+		rts
+
+*********************************************************************************
+*   			  		find1													*
+*con las coordenadas de la tecla, mira en un arreglo a que tecla coorresponde	*
+*y guarda esa tecla en las variables fila o colu dependiendo de que vez es		*
+*********************************************************************************
+
+find1	equ	*		//idenitifca tecla
+		ldx	#artec		
+		ldaa	fil
+		ldab	#tecsize
+		mul
+		abx
+		ldaa	col
+		ldab	#keysize
+		mul
+		abx
+		ldaa	0,x
+		cmpa	#$72		//si es un restart, se hace un undo
+		bne	notres		//72 es ascii r
+		dec	ferr		//como es restart, no hay error
+		inc	cont		//se repara el contador de barcos
+		jsr	undo
+		rts
+notres	cmpa	#$61		//si es una a, se hace un reiniciar
+		bne	notrese		//61 es ascii a
+		jmp	comienz
+notrese	ldab	type		//nos fijamos si es submarino o carguero
+		bne	esub
+		ldab	#3		//si el cont de fila, colu o direc esta en 3, va en fila
+		cmpb	cont2
+		beq	enfila
+		ldab	#2		//si el cont de fila, colu o direc esta en 2, va en colu
+		cmpb	cont2
+		beq	encol
+		staa	direc		//si el cont de fila, colu o direc esta en 1, va en direc
+		bra	termin
+encol	staa	colu
+		bra	termin
+enfila	staa	fila
+		bra	termin
+esub	ldab	#2		//es submarino
+		cmpb	cont2		//si el contador de fila o colu esta en 2, va en fila
+		beq	enfila		//si el contador de fila o colu esta en 1, va en colu
+		bra	encol
+termin	rts
+
+*********************************************************************************
+*   			  	rfsh - refresh												*
+*copia el tablero del player al tablero del display (mostrando el estado actual)*
+*obtiene en una variable el player coorrespondiente								*
+*********************************************************************************
+
+rfsh	equ	*
+		psha
+		ldaa	player		//nos fijamos que player es para cargar su arreglo
+		beq	p111
+		ldx	#array2
+		bra	starto
+p111	ldx	#array
+starto	ldy	#btmp
+copy1	ldaa	0,x
+		staa	0,y
+		inx
+		iny
+		cpx	#btmpf
+		bne	copy1		//se traslada el tablero del jugador al display	
+		pula
+		rts
+
+*********************************************************************************
+*   			  		errtec													*
+*pone el display en rojo y no sale hasta que se toque el boton de restart		*
+*********************************************************************************
+
+errtec	equ	*		//display en rojo
+		psha
+		ldaa	#E5
+		jsr	display		//tocar reset para salir
+		pula
+		pshx
+		dec	ferr
+		ldx	#btmp
+		ldaa	#rojo
+loop	staa	0,x		//colorea cada posicion del bit map con rojo
+		inx
+		cpx	#btmpf
+		bne	loop
+		staa	0,x
+barrer	jsr	barrido		//se debe tocar el restart o no se volvera al juego
+		ldaa	fil
+		ldab	col
+		cmpa	#3
+		bne	barrer
+		cmpb	#3
+		bne	barrer		//esperamos al boton de reset
+		pulx
+		jsr	rfsh
+		jsr	time
+		rts
+
+*********************************************************************************
+*   			  		cmp														*
+*se fija que la tecla este dentro del rango de teclas admitidas					*
+*********************************************************************************
+
+cmp		equ	*
+		ldaa	#0
+		staa	error
+		ldaa	fil
+		ldab	col
+		cmpa	#0
+		bne	nesf0		//no es fila 0
+		cmpb	#0
+		beq	endmc		//es la a, resetear
+		cmpb	#2
+		beq	eserror		//es la c
+		cmpb	#3
+		beq	eserror		//es el p1
+nesf0	cmpa	#1
+		bne	nesf1
+		cmpb	#3
+		beq	eserror		//es el p2
+nesf1	cmpa	#2
+		bne	nesf2
+		cmpb	#3
+		beq	eserror		//es el fire
+nesf2	cmpa	#1
+		bgt	endmc		//si la fila es mayor a la 1 esta dentro de rango
+		ldaa	type
+		bne	eserror		//si son cargueros, se puede presionar una letra
+		ldaa	cont2		//se puede cargar una letra cuando se cargue la direc
+		cmpa	#1
+		beq	endmc
+eserror	inc	error
+		psha
+		ldaa	#E1
+		jsr	display		//error codigo 14
+		pula
+endmc	rts
+
+
+*********************************************************************************
+*   			  		p1														*
+*modifica el arreglo del player													*
+*********************************************************************************
+
+p1		equ	*
+		ldaa	#1
+		staa	fundo		//nos habilita a hacer un undo
+		ldy	#0		//creamos un flag temporal
+oncemor	ldaa	player		//me fijo si es el player 1 o 2
+		beq	one
+		ldx	#array2
+		bra	two
+one		ldx	#array
+two		ldaa	fila
+		staa	lfila		//se hace un backup por el undo
+		ldab	#arsize
+		mul
+		abx
+		ldaa	colu
+		staa	lcolu		//se hace un backup por el undo
+		ldab	#elsize
+		mul
+		abx
+		ldaa	colu
+		psha
+		ldaa	fila
+		psha
+		jsr	chkpos		//corrobora que no este ocupado
+		pula
+		pula			//hago dos pulls para no arruinar el stack
+		ldaa	alpre		//already pressed
+		beq	todok
+		cpy	#1
+		bne	gerrtec
+		jsr	errchrg
+gerrtec	psha
+		ldaa	#E4
+		jsr	display		//error codigo 13
+		pula
+		jsr	errtec
+		rts
+todok	ldaa	type		//se corrobora si se pondra submarino o carguero
+		bne	essub		//es un submarino
+		cpy	#1
+		beq	itspos
+		jsr	inter		//interpreto la direccion con el codigo propio
+		ldaa	ferr
+		bne	nohayer
+		rts
+nohayer	ldaa	direc
+		jsr	posble		//corroboramos que sea posible poner un carguero en esa posicion
+		cmpa	#0
+		beq	itspos
+		psha
+		ldaa	#E3
+		jsr	display		//error codigo 12
+		pula
+		jsr	errtec
+		rts
+itspos	ldaa	#stcar		//guarda un casillero de carguero en la posicion
+		staa	0,x
+		cpy	#1		//miramos el status del flag
+		beq	write
+		ldaa	direc
+		staa	ldirec		//backup de la direccion
+		jsr	posdir		//identifica en que posicion ira el segundo casillero del carguero
+		ldy	#1		//se setea el flag temporal
+		ldaa	colu
+		staa	colu3
+		ldaa	fila
+		staa	fila3		//hacemos backup complementario de fila y colu por si hay un undo
+		ldaa	colu2
+		staa	colu
+		ldaa	fila2
+		staa	fila		//hacemos una transferencia de variables para la re-ejecucion de la subr
+		jmp	oncemor
+essub	ldaa	#stsub		//guarda un submarino verde en la posicion
+		staa	0,x
+write	jsr	rfsh
+		rts
+
+*********************************************************************************
+*   			  		start													*
+*dibuja un barquito en el display												*
+*********************************************************************************
+
+start	equ	*
+		ldx	#starta		//carga el inicio de la tabla que indica que color copiar en cada casillero
+		ldy	#btmp		//carga el inicio del bit map
+copy2	ldaa	0,x
+		staa	0,y		//colorea cada casillero segun corresponda
+		inx
+		iny
+		cpx	#btmpf
+		bne	copy2		//una vez finalizado habra quedado dibujado un barquito
+		psha
+		ldaa	#START		//pasa un mensaje de bienvenida por el display
+		jsr	display
+		pula
+barrer2	jsr	barrido
+		ldaa	fil
+		ldab	col
+		cmpa	#0
+		bne	barrer2
+		cmpb	#3
+		bne	barrer2		//la unica forma de iniciar el juego es presionando la tecla P1
+		jsr	time
+		rts
+
+*********************************************************************************
+*   			  		time													*
+*********************************************************************************
+
+time	equ	*		
+		pshx			//backup de x
+		pshy			//backup de y
+		ldx	#$FFFF		//cargar en x 41666 decimal, sera el primer contador
+loop4	ldy	#8		//cargar en y 2 decimal, sera el segundo contador
+loop2	dey			//decrementar el contador
+		bne	loop2		//si y no es 0, vuelve a decrementar y
+		dex			//decrementar x
+		bne	loop4		//si x no es 0, vuelve a empezar el loop
+		ldy	#$0000		//cargo y con el valor $0000
+		ldy	$0000		//cargo y con el valor en la posicion de memoria $1000
+		puly			//recupera y del backup
+		pulx			//recupera x del backup
+		rts	
+
+*********************************************************************************
+*   			  		clrary													*
+*borra todos los tableros completamente											*
+*********************************************************************************
+
+clrary	equ	*
+		ldx	#array
+		ldaa	#0
+loop66	staa	0,x
+		inx
+		cpx	#artec
+		bne	loop66
+		rts
+
+*********************************************************************************
+*   			  		undo													*
+*deshace el ultimo movimiento dentro del modo configuracion						*
+*********************************************************************************
+
+undo	equ	*
+		pshy
+		ldy	#0		//creamos flag temporal
+		dec	fundo
+		beq	undoa		//nos fijamos que se pueda hacer undo
+		psha
+		ldaa	#E2
+		jsr	display
+		pula
+		jsr	errtec
+		inc	ferr		//dejamos el flag de error para que reinicie
+		dec	cont		//acomodamos el desfase
+		puly
+		rts
+undoa	ldaa	player
+		beq	p11
+		ldx	#array2		//se mira si es el player 1 o 2
+		bra	p22
+p11		ldx	#array		
+p22		ldaa	type
+		bne	subma		//nos fijamos si es carguero o submarino
+		ldaa	cont
+		cmpa	#3		//si se hace un undo la primera vez que se entra a la carga de
+		bne	normie		//cargueros, el undo correspondia al ultimo submarino
+		ldaa	#1
+		staa	especia		//caso especial
+		staa	cont
+		staa	type
+		bra	subma		
+normie	ldaa	fila3		//carga backup
+		ldab	#arsize
+		mul
+		abx
+		ldaa	colu3		//carga backup
+		ldab	#elsize
+		mul
+		abx
+		ldaa	#negro		//borra la informacion en la ultima posicion
+		staa	0,x
+		ldaa	type
+		bne	refres		//nos fijamos si es carguero o submarino
+		cpy	#1
+		beq	refres		//si ya borramos ambas pos del carguero, refrescar display
+		ldaa	colu2		//si es un carguero tenemos que limpiar tambien la segunda pos
+		staa	colu3
+		ldaa	fila2
+		staa	fila3		//cambiamos fila y columna para re-ejecutar la subrutina
+		iny			//seteamos el flag temporal
+		bra	undoa		//llamamos nuevamente a la subrutina con la nueva fila y columna
+subma	ldaa	lfila		//carga backup
+		ldab	#arsize
+		mul
+		abx
+		ldaa	lcolu		//carga backup
+		ldab	#elsize
+		mul
+		abx
+		ldaa	#negro		//borra la informacion en la ultima posicion
+		staa	0,x
+refres	jsr	rfsh
+		puly
+		rts
+	
+*********************************************************************************
+*   			  		posdir													*
+*a partir de la fila, columna y direccion, posiciona el casillero siguiente		*
+*********************************************************************************
+
+posdir	equ	*
+		ldaa	direc
+		cmpa	#0		//si la direccion es 0, es arriba
+		beq	up
+		cmpa	#1		//si la direccion es 1, es abajo
+		beq	down
+		cmpa	#2		//si la direccion es 2, es izquierda
+		beq	left
+		ldab	colu		//la direccion es derecha
+		incb			//se mueve a la derecha
+		stab	colu2
+		ldab	fila
+		stab	fila2		//transfer de datos
+		bra	done
+left	ldab	colu		//la direccion es izquierda
+		decb			//se mueve a la izquierda
+		stab	colu2
+		ldab	fila
+		stab	fila2		//transfer de datos
+		bra	done
+up		ldab	fila		//la direccion es arriba
+		decb			//se mueve hacia arriba
+		stab	fila2
+		ldab	colu
+		stab	colu2		//transfer de datos
+		bra	done
+down	ldab	fila		//la direccion es abajo
+		incb			//se mueve para abajo
+		stab	fila2
+		ldab	colu
+		stab	colu2		//transfer de datos
+done	rts
+
+*********************************************************************************
+*   			  		chkpos													*
+*mira que esa posicion no este ya escrita, se indica con un 1 a traves de alpre	*
+*reciba fila y columna por stack												*
+*********************************************************************************
+
+chkpos	equ    *
+		pshx
+		pshy			//backup de x e y
+		tsy
+		ldaa    #0
+		staa    alpre		//se asegura que el flag este reseteado
+		ldx    	#btmp
+		ldaa	6,y		//se toma fila del stack
+		ldab    #arsize
+		mul
+		abx
+		ldaa	7,y		//se toma columna del stack
+		ldab    #elsize
+		mul
+		abx
+		ldaa    0,x		//se posiciona en la posicion a checkear
+		beq	return	
+		ldaa    #1
+		staa    alpre
+return	puly			//recupera y
+		pulx			//recupera x
+		rts
+
+*********************************************************************************
+*   			  	inter														*
+*interpreta direccion con la tecla presionada									*
+*********************************************************************************
+
+inter 	equ 	*
+		ldaa	direc
+		cmpa	#$62		//b es arriba, 62 en ascii
+		bne	notup
+		ldaa	#0		//0 codigo interno para "arriba"
+		staa	direc
+		bra	gotdire
+notup	ldaa	direc
+		cmpa	#$64		//d es izquierda, 64 en ascii
+		bne	notleft
+		ldaa	#2		//2 codigo interno para "izquierda"
+		staa	direc
+		bra	gotdire
+notleft	ldaa	direc
+		cmpa	#$65		//e es abajo, 65 en ascii
+		bne	notdown
+		ldaa	#1		//1 codigo interno para "abajo"
+		staa	direc
+		bra	gotdire
+notdown	ldaa	direc
+		cmpa	#$66		//f es derecha, 66 en ascii
+		bne	notrght
+		ldaa	#3		//3 codigo interno para "derecha"
+		staa	direc
+		bra	gotdire
+notrght	jsr	errtec
+gotdire	rts
+
+
+*****************************************************************************************
+*   			 subrutina posible    													*
+*esta subruitna comprueba si es posible poner un carguero en la matriz					*
+*recibe por IX una direccion de memoria y Acca el sentido hacia donde se quiere 		*
+*devuelve en AccA un 1 si es imposible y un 0 si es posible								*
+*****************************************************************************************
+
+posble	equ	*
+		pshx
+		clr	resp
+		staa	sent
+		psha
+		ldaa	player		//me fijo que palyer es
+		beq	esp1
+		ldy	#array2
+		bra	esp2
+esp1	ldy	#array		//manejo de la matriz con numeros del 1 al 36
+esp2	pula
+		jsr 	sum
+		stab	dif
+		ldx 	#cc
+		idiv
+		stab	resto
+		cmpb	#rc1		
+		bne	s1		//la posision esta en la columa 1?si la respuesta es, si
+		jsr 	C1		//voy a la subrutina de la C1
+s1		ldab	resto		
+		cmpb	#rc6		
+		bne	s2		//la posision esta en la columa 6?si la respuesta es, si
+		jsr	C6		//voy a la subrutina de la C6
+s2		ldaa	dif
+		ldab	#cc
+		sba
+		bpl	s3		//la posision esta en la fila 1?si la respuesta es, si
+		jsr	F1		//voy a la subrutina de la F1
+s3		ldaa	dif
+		ldab	#pnuf
+		sba
+		bmi	s4		//la posision esta en la fila 6?si la respuesta es, si
+		jsr	F6		//voy a la subrutina de la F6
+s4		ldaa	resp
+		pulx
+		rts
+
+*********************************************************************************
+*   			  	subrutinas de posble										*
+*********************************************************************************
+
+
+C1		equ	*		//en esta subrutina miro el flag de la direccion izquierda, si es, devuelvo imposible
+		%bckp
+		ldaa	#I
+		cmpa	sent
+		bne	ret
+		jsr 	impos
+ret		%rbckp
+		rts
+
+C6		equ	*		//en esta subrutina miro el flag de la direccion derecha, si es, devuelvo imposible
+		%bckp
+		ldaa	#D
+		cmpa	sent
+		bne	ret1
+		jsr 	impos
+ret1	%rbckp
+		rts
+
+F1		equ	*		//en esta subrutina miro el flag de la direccion arriba, si es, devuelvo imposible
+		%bckp
+		ldaa	#Ar
+		cmpa	sent
+		bne	ret2
+		jsr 	impos
+ret2	%rbckp
+		rts
+
+F6		equ	*		//en esta subrutina miro el flag de la direccion abajo, si es, devuelvo imposible
+		%bckp
+		ldaa	#Ab
+		cmpa	sent
+		bne	ret3
+		jsr 	impos
+ret3	%rbckp
+		rts
+
+impos	equ	*
+		ldaa	#npos
+		staa	resp
+		rts
+
+*********************************************************************************
+*    			resta       													*
+*-esta subrutina  resta dos numeros signados de 2 bytes y los envia al display	*
+*-recibe en IX el primer numer y en IY el segundo numero						*
+*- devuelve en AccB el resultado												*
+*********************************************************************************
+	
+sum		equ	*
+		xgdx			//divido el primer numero en 2 bytes 
+		stab	nib1		//y guardo cada parte en memoria
+		staa	nib2		
+		xgdy			//repito la operacion con el segundo numero
+		staa 	nib2_2
+		ldaa	nib1		//cargo el byte menos significativo del primer numero y lo 
+		sba			//y lo sumo con el byte menos significativo del segundo
+		bcc	sigo		//si hay carry sumo uno en el byte mas significativo del 
+		inc	nib2		//primer numero
+sigo	staa	res1		//guardo el primer resultado en memoria
+		ldaa	nib2		//sumo los bytes mas significativos
+		ldab	nib2_2
+		sba			//en Acca tengo el byte mas significativo del resultado
+		ldab	res1		//cargo en Accb el byte menos significativo asi tengo en D el 
+		rts
+
+*********************************************************************************
+*   			  	blacky														*
+*cuando se termina la carga del jugador, pone el tablero en negro				*
+*********************************************************************************
+
+blacky	equ	*
+		ldaa	player		//revisamos si es el primero o el segundo
+		bne	p2
+		ldx	#array
+		bra	blacky1
+p2		ldx	#array2
+blacky1	ldab	#36		//numero de celdas
+blacky2	ldaa	0,x
+		anda	#11000000b	//boramos el color, dejando solo la informacion
+		staa	0,x
+		inx
+		decb
+		bne	blacky2		//lo hacemos 36 veces
+		jsr	rfsh
+		rts
+
+
+*********************************************************************************
+*   			  		clrvars													*
+*esta subrutina borra todas la variables										*
+*********************************************************************************
+
+
+clrvars	equ	*
+		%bckp
+		ldab	#cantvar	//usa b como un contador de variables
+		ldx	#vars		//carga en x la posicion de  comienzo de las variables
+loop5	clr	0,x		//borra la posicion de memoria 
+		inx			//incrementa el puntero
+		decb			//decremento contador
+		bne	loop5		//si no se termino de borrar, loop hasta contador igual 0
+		%rbckp
+		rts
+
+*********************************************************************************
+*   			  		errchrg													*
+*esta subrutina se ejecuta solo cuando se superpone el segundo de un carguero	*
+*y corrige ese error															*
+*********************************************************************************
+
+errchrg	equ	*
+		ldaa	player
+		beq	pl1
+		ldx	#array2		//se mira si es el player 1 o 2
+		bra	pl2
+pl1		ldx	#array		
+pl2		ldaa	fila3		//carga backup
+		ldab	#arsize
+		mul
+		abx
+		ldaa	colu3		//carga backup
+		ldab	#elsize
+		mul
+		abx
+		ldaa	#negro		//borra la informacion en la ultima posicion
+		staa	0,x
+		rts
+
+*********************************
+*	   GAME						*
+*********************************
+game	equ	*
+		ldaa	#8		//creo dos contadores para determinar quien es el ganador
+		staa	pp1	
+		staa	pp2
+stp1	ldaa	#1
+		staa	tply		//guardo 1 en "tply"
+		clr	vplyr		//borro la variable "vplyr"
+		jsr	clr4dis		//borro el display de 4 caracteres
+		ldaa	#showp		//muestro "P1" en el display
+		ldab	#3
+		jsr	outchar
+		ldaa	#n1
+		ldab	#2
+		jsr	outchar
+		ldx	#array2		//empieza a jugar P1
+		ldy	#btmp
+		jsr	copy		//copio la tabla creada por el P2
+		jsr	funcion
+		ldaa	vplyr		//comparo si se presiono P1
+		cmpa	#0
+		bne	stp1
+		ldaa	pp1
+		cmpa	#0		//comparo para ver si gano el jugador 1
+		bne	kp2
+		ldaa	#P1WIN
+		jsr	display		//muestra en display que gano P1
+		bra	wreset
+kp2		jsr	time
+		jsr	barrido		//lee que tecla fue presionada
+		jsr	pres
+		ldaa	tecpres
+		cmpa	#q		//espero a que se presione P2
+		bne	kp2
+		ldx	#btmp		//copio el arreglo del display al arreglo del jugador2
+		ldy	#array2
+		jsr	copy
+stp2	ldaa	#0
+		staa	tply		//guardo 0 en "tply"
+		clr	vplyr		//borro la variable "vplyr"
+		jsr	clr4dis		//borro el display de 4 caracteres
+		ldaa	#showp		//muestro "P2" en el display
+		ldab	#3
+		jsr	outchar
+		ldaa	#n2
+		ldab	#2
+		jsr	outchar
+		ldx	#array		//empieza a jugar P2
+		ldy	#btmp
+		jsr	copy		//copio la tabla creada por el P2
+		jsr	funcion
+		ldaa	vplyr
+		cmpa	#0
+		bne	stp2
+		ldaa	pp2
+		cmpa	#0
+		bne	fp2
+		ldaa	#P2WIN
+		jsr	display		//muestra en display que gano P2
+		bra	wreset
+fp2		jsr	time
+		jsr	barrido		//lee que tecla fue presionada
+		jsr	pres
+		ldaa	tecpres
+		cmpa	#p
+		bne	fp2
+		ldx	#btmp			
+		ldy	#array
+		jsr	copy
+		jmp	stp1
+		rts
+wreset	jsr	time		//gana un jugador, espera a que se presione reset
+		jsr	barrido
+		jsr	pres
+		ldaa	tecpres
+		cmpa	#r
+		bne	wreset
+		jmp	comienz
+
+*********************************************************************************
+*					FUNCION														*
+*********************************************************************************
+
+
+funcion	equ	*
+loop6	jsr	time
+		jsr	barrido		//lee que tecla fue presionada
+		jsr	pres
+		ldaa	tecpres
+		cmpa	#7		//compara si es un numero
+		blt	number
+		cmpa	#r		//compara si se presiona "reset"
+		bne	loop6
+		jmp	comienz			
+number	staa	tfil		//guarda la primera tecla presionada en "tfil"
+		adda	#toascii
+		inca
+		ldab	#1
+		jsr	outchar
+loop7	jsr	time
+		jsr	barrido
+		jsr	pres
+		ldaa	tecpres
+		cmpa	#7		//compara si es un numero
+		blt	number2
+		psha
+		ldaa	tply
+		cmpa	#0
+		beq	tply2
+		pula
+		cmpa	#p		//compara si se presiona "P1"
+		bne	slt1
+		bra	bundo
+tply2	pula
+		cmpa	#q		//compara si se presiona "P2"
+		bne	slt1
+bundo	inc	vplyr			
+		rts
+slt1	cmpa	#r		//compara si se presiona "reset"
+		bne	loop7
+		jmp	comienz
+number2	staa	tcol		//guarda la segunda tecla presionada en "tcol"
+		adda	#toascii
+		inca
+		ldab	#0
+		jsr	outchar
+loop8	jsr	time
+		jsr	barrido
+		jsr	pres
+		ldaa	tecpres
+		psha
+		ldaa	tply
+		cmpa	#0
+		beq	tply1
+		pula
+		cmpa	#p		//compara si se presiona "P1"
+		bne	slt7
+		bra	bundo2
+tply1	pula
+		cmpa	#q		//compara si se presiona "P2"
+		bne	slt7
+bundo2	inc	vplyr
+		rts
+slt7	cmpa	#t		//compara si se presiona "fire"
+		beq	fire			
+		cmpa	#r		//compara si se presiona "reset"
+		bne	loop8
+		jmp	comienz
+fire	jsr	psdis		//consigue en x la posicion del display a donde se disparo
+		jsr	dobdisp		//compara si ya fue disparado
+		ldaa	fla_err
+		cmpa	#0
+		beq	cntnue
+		jsr	alprs
+		jmp	loop6		//si ya fue disparado, vuelve al barrido del teclado
+cntnue	jsr	pintar
+		rts
+
+
+*********************************************************************************
+*				Subrutina copia													*
+*esta subrutina  copia una cadena de bytes de una direccion de memoria a otra 	*
+*direccion de memoria recibe en IX el inicio de la cadena a copiar, 			*
+*en IY la direccion donde se debe copiar y en AccA la cantidad de caracteres	*
+*********************************************************************************
+
+copy	equ	*
+		ldaa 	count
+lp1		ldab	0,x
+		stab	0,y
+		inx
+		iny
+		dec	count
+		bne	lp1	
+		staa	count
+		rts
+
+*********************************************************************************
+*				ALREADY PRESSED													*
+*muestra en el display "XX" (ya fue disparado)									*
+*********************************************************************************
+
+alprs	equ	*
+		ldaa	#$56
+		ldab	#1
+		jsr	outchar
+		decb
+		jsr	outchar
+		rts
+
+*********************************************************************************
+*				CLEAR DISPLAY	4												*
+*esta subrutina borra el display de 4 caracteres								*
+*********************************************************************************
+
+clr4dis	equ	*
+		ldaa	#0
+		ldab	#3
+loop10	jsr	outchar
+		decb
+		cmpb	#4
+		bne	loop10
+		rts
+
+*********************************************************************************
+*				TECLA PRESIONADA												*
+*esta subrutina identifica la tecla presionada y lo devuelve en "tecpres"		*
+*********************************************************************************
+
+pres	equ	*
+		%bckp
+		ldx	#artec
+		ldaa	#tecsize
+		ldab	fil
+		mul
+		abx
+		ldab	col
+		abx
+		ldaa	0,x
+		staa	tecpres
+		%rbckp
+		rts
+
+*********************************************************************************
+*				POSICION EN DISPLAY												*
+*devuelve en x la posicion de el bloque a disparar								*
+*********************************************************************************
+
+psdis	equ	*
+		psha
+		pshb
+		ldx	#btmp
+		ldaa	#arsize
+		ldab	tfil
+		mul
+		abx
+		ldab	tcol
+		abx
+		pulb
+		pula
+		rts
+
+*********************************************************************************
+*			Subrutina doble disparo												*
+*esta subrutina contola que no se dispare dos veces en el mismo lugar			*
+*recibe en Ix la posicion de memoria del dispar	devuelve						*
+*un flag con 1  si es no es posible ejecutar el disparo o con 0 si lo es 		*
+*********************************************************************************
+
+
+dobdisp	equ	*
+		ldaa	0,x
+		anda	#00111111b
+		cmpa	#$0
+		beq 	posible
+		ldaa	#1
+		staa	fla_err	
+		rts
+posible	clr	fla_err
+		rts
+
+
+*********************************************************************************	
+*				Subrutina pintar												*
+*-Esta subrutina pinta una posicion del display en su color correspondiente		*
+*-Recibe en IX una posicion de memoria a analizar								*
+*-devuelve esa posicion cambiada (pintada) segun corresponda					*
+*********************************************************************************
+
+pintar	equ	*
+		ldaa	0,x
+		cmpa	#sub
+		bne	si1
+		jsr 	hund
+		rts	
+si1		ldaa	0,x
+		cmpa	#carg
+		bne	si2
+		jsr	cargero
+		rts
+si2		ldaa	0,x	
+		oraa	#agua
+		staa	0,x
+		rts
+	
+*********************************************************************************
+*				Subrutina Hundir												*
+*Esta subrutina hunde un posicion de memoria									*
+*Recibe en IX la posicion a hundir 												*
+*devuelve el byte hundido														*
+*********************************************************************************
+	
+hund	equ	*
+		ldaa 	0,x
+		oraa	#rojo	
+		staa	0,x	
+		ldaa	tply
+		cmpa	#1
+		bne	slt4
+		dec	pp1
+		bra	slt5
+slt4	dec	pp2
+slt5	rts
+	
+*********************************************************************************
+*				Subrutina carguero												*
+*Esta subrutina marca o hunde un cargero segun correponda						*
+*recibe en IX la posicion del carguero, y un flag que 							*
+*si esta en 1 esta jugando el P1 y si esta en 0 lo esta el P2					*
+*devuelve la posicion de memoria con el color correspondiente					*
+*********************************************************************************
+
+cargero	equ	*
+		stx	tircar
+		ldaa	#1
+		cmpa	tply
+		beq	p1a
+		jsr	playr2
+		rts
+
+p1a		jsr	player1
+		rts
+
+
+
+******* player 1 *********
+
+player1	equ	*
+		cpx 	p1c1b1
+		bne	co
+		jsr 	cger1p1
+		rts
+
+co		ldx	tircar
+		cpx 	p1c1b2
+		bne	co2	
+		jsr	cger1p1
+		rts
+
+co2		ldx	tircar
+		cpx 	p1c2b1
+		bne	co3	
+		jsr	cger2p1	
+		rts
+
+co3		ldx	tircar
+		jsr	cger2p1
+		rts
+
+******* carguero 1 p1 *********
+
+cger1p1	equ	*
+		ldx	tircar
+		ldaa	#1
+		cmpa	p1carg1
+		bne	toco1
+		ldy	p1c1b1
+		ldx	p1c1b2	
+		jsr	hundca
+		rts
+
+toco1	ldaa	#1
+		staa	p1carg1
+		ldx	tircar
+		ldaa	0,x
+		oraa	#amll	
+		staa	0,x
+		rts
+
+******* carguero 2 p1 *********
+
+cger2p1	equ	*
+		ldx	tircar
+		ldaa	#1
+		cmpa	p1carg2
+		bne	toco2
+		ldy	p1c2b1
+		ldx	p1c2b2	
+		jsr	hundca
+		rts
+
+toco2	ldaa	#1
+		staa	p1carg2
+		ldx	tircar
+		ldaa	0,x
+		oraa	#amll	
+		staa	0,x
+		rts
+
+
+
+******* player 2 *********
+playr2	equ	*
+		cpx 	p2c1b1
+		bne	p2co
+		jsr 	cger1p2
+		rts
+
+p2co	ldx	tircar
+		cpx 	p2c1b2
+		bne	p2co2	
+		jsr	cger1p2
+		rts
+
+p2co2	ldx	tircar
+		cpx 	p2c2b1
+		bne	p2co3	
+		jsr	cger2p2	
+		rts
+
+p2co3	ldx	tircar
+		jsr	cger2p2
+		rts
+
+******* carguero 1 p2*********
+
+cger1p2	equ	*
+		ldx	tircar
+		ldaa	#1
+		cmpa	p2carg1
+		bne	toc1
+		ldy	p2c1b1
+		ldx	p2c1b2	
+		jsr	hundca
+		rts
+
+toc1	ldaa	#1
+		staa	p2carg1
+		ldx	tircar
+		ldaa	0,x
+		oraa	#amll	
+		staa	0,x
+		rts
+
+******* carguero 2 p2*********
+
+cger2p2	equ	*
+		ldx	tircar
+		ldaa	#1
+		cmpa	p2carg2
+		bne	toc2
+		ldy	p2c2b1
+		ldx	p2c2b2	
+		jsr	hundca
+		rts
+
+toc2	ldaa	#1
+		staa	p2carg2
+		ldx	tircar
+		ldaa	0,x
+		oraa	#amll	
+		staa	0,x
+		rts
+
+
+*********************************************************************************
+*				Subrutina Hundir cargero		 								*
+*Esta subrutina hunde dos posiciones de memoria	 								*
+*Recibe en IX y en IY la dos posiciones a hundir 	 							*
+*devuelve las pocisiones hundidas			 									*
+*********************************************************************************
+
+hundca	equ	*
+		ldaa	0,x
+		anda	#negr
+		staa	0,x
+		jsr	hund
+		xgdy
+		xgdx
+		ldaa	0,x
+		anda	#negr
+		staa	0,x
+		jsr	hund
+		rts
+
+*********************************************************************************
+*					chrg	                           							*
+*se guarda en memoria las posiciones de los cargueros							*
+*********************************************************************************
+
+chrg	equ	*
+		ldx	#p1c1b1
+		ldaa	player
+		beq	pl11
+		jsr	cp2		//subrutina del player1
+		rts
+pl11	jsr	cp1
+		rts
+
+******* cargueros p1*********
+
+cp1		equ	*
+		ldaa	#0
+		staa	fcar		//reinicio el flag
+		ldy	#array
+		ldaa	cont		//me fijo que carguero
+		cmpa	#2
+		bne	cargdos		//se va si es el segundo carguero
+lup5	ldaa	0,y		//es el primer carguero
+		cmpa	#stcar
+		bne	nocop		//copio la posicion
+		ldaa	fcar		//me fijo si es el primer o segundo byte
+		bne	secbyte
+		sty	p2c1b1
+		inc	fcar		//copio el primer byte e incremento el flag
+		bra	nocop
+secbyte	sty	p2c1b2
+nocop	iny
+		cpy	#array2		//sigo mirando hasta que se termine el array
+		bne	lup5
+		rts
+cargdos	ldaa	0,y		//es el primer carguero
+		cmpa	#stcar
+		bne	nocop2		
+		cpy	p2c1b1		//me fijo si no es el carguero uno byte uno
+		beq	nocop2
+		cpy	p2c1b2		//me fijo si no es el carguero uno byte dos	
+		beq	nocop2
+		ldaa	fcar		//me fijo si es el primer o segundo byte
+		bne	secbyt
+		sty	p2c2b1
+		inc	fcar		//copio el primer byte e incremento el flag
+		bra	nocop2
+secbyt	sty	p2c2b2
+nocop2	iny
+		cpy	#array2		//sigo mirando hasta que se termine el array
+		bne	cargdos
+		rts
+
+******* cargueros p2*********
+
+cp2		equ	*
+		ldaa	#0
+		staa	fcar		//reinicio el flag
+		ldy	#array2
+		ldaa	cont		//me fijo que carguero
+		cmpa	#2
+		bne	cargdo		//se va si es el segundo carguero
+lup9	ldaa	0,y		//es el primer carguero
+		cmpa	#stcar
+		bne	nocop9		//copio la posicion
+		ldaa	fcar		//me fijo si es el primer o segundo byte
+		bne	secbyt9
+		sty	p1c1b1
+		inc	fcar		//copio el primer byte e incremento el flag
+		bra	nocop9
+secbyt9	sty	p1c1b2
+nocop9	iny
+		cpy	#artec		//sigo mirando hasta que se termine el array
+		bne	lup9
+		rts
+cargdo	ldaa	0,y		//es el primer carguero
+		cmpa	#stcar
+		bne	nocop10		
+		cpy	p1c1b1		//me fijo si no es el carguero uno byte uno
+		beq	nocop10
+		cpy	p1c1b2		//me fijo si no es el carguero uno byte dos	
+		beq	nocop10
+		ldaa	fcar		//me fijo si es el primer o segundo byte
+		bne	secbyt8
+		sty	p1c2b1
+		inc	fcar		//copio el primer byte e incremento el flag
+		bra	nocop10
+secbyt8	sty	p1c2b2
+nocop10	iny
+		cpy	#artec		//sigo mirando hasta que se termine el array
+		bne	cargdo
+		rts
+
+*********************************************************************************
+*					display                           							*
+*la subrutina recibe por el registro a un codigo y segun este 					*
+*copia un determinado mensaje													*
+*********************************************************************************
+display	equ	*
+		%bckp
+		ldx	#inicio
+		cmpa	#START
+		beq	gotit
+		ldx	#turno1
+		cmpa	#P1TURN
+		beq	gotit
+		ldx	#turno2
+		cmpa	#P2TURN	
+		beq	gotit
+		ldx	#win1
+		cmpa	#P1WIN
+		beq	gotit	
+		ldx	#win2
+		cmpa	#P2WIN
+		beq	gotit
+		ldx	#hundirs
+		cmpa	#SINKSUB
+		beq	gotit
+		ldx	#hundirf
+		cmpa	#SINKLD
+		beq	gotit
+		ldx	#golpear
+		cmpa	#HITLD
+		beq	gotit
+		ldx	#fallido
+		cmpa	#MISS
+		beq	gotit
+		ldx	#er1
+		cmpa	#E1
+		beq	gotit
+		ldx	#er2
+		cmpa	#E2
+		beq	gotit
+		ldx	#er3
+		cmpa	#E3
+		beq	gotit
+		ldx	#er4
+		cmpa	#E4
+		beq	gotit
+		ldx	#er5
+		cmpa	#E5
+		beq	gotit
+		ldx	#csub
+		cmpa	#SUB
+		beq	gotit
+		ldx	#cbat
+		cmpa	#BAT
+		beq	gotit
+		ldx	#endl
+		cmpa	#LEND
+		beq	gotit
+		ldx	#startga
+		cmpa	#BEGIN
+		beq	gotit
+		ldx	#ddisp
+		cmpa	#XX
+		beq	gotit
+gotit	ldaa	0,x		;esta subrutina agarra los primeros 4 caracteres de la palabra y los pone en la posiciones 0,1,2,3 del display respectivamente
+		ldab	#3
+		jsr	outchar
+		ldaa	1,x
+		ldab	#2
+		jsr	outchar
+		ldaa	2,x
+		ldab	#1
+		jsr	outchar
+		ldaa	3,x
+		ldab	#0
+		jsr	outchar
+		inx
+		jsr	time2
+		ldaa	D,x		//carga en A el final/comienzo de la palabra y lo compara con $00
+		cmpa	#00
+		bne 	gotit		//si no es igual, sigue cargando los siguientes valores y si es igual, significa que termino de cargar toda la palabra
+		%rbckp
+		rts
+	
+time2	equ	*		//esta subrutina hace un delay para que sea posible leer en el display
+		%bckp
+		pshx			//backup de x
+		pshy			//backup de y
+		ldx	#6300		//cargar en x 63000 decimal, sera el primer contador
+tloop1	ldy	#4		//cargar en y 4 decimal, sera el segundo contador
+tloop2	dey			//decrementar el contador
+		bne	tloop2		//si y no es 0, vuelve a decrementar y
+		dex			//decrementar x
+		bne	tloop1		//si x no es 0, vuelve a empezar el loop
+		ldy	#$0000		//cargo y con el valor $0000
+		ldy	$0000		//cargo y con el valor en la posicion de memoria $1000
+		puly			//recupera y del backup
+		pulx			//recupera x del backup
+		%rbckp
+		rts			
+
+*****************************************************************************************
+*		Subrutina variable carguero exchange											*
+*- Esta subrutina cambia las variables de la posicion los cargueros del arreglo de 		*
+*cada jugador a la posicion del bitmap del display para posteriormente ser utilizadas	*	
+*****************************************************************************************
+
+
+vacxg	equ	*
+		ldx	p2c1b1		;player 1
+		jsr	pas_da
+		stx	p2c1b1
+
+		ldx	p2c1b2
+		jsr	pas_da
+		stx	p2c1b2
+
+		ldx	p2c2b1
+		jsr	pas_da
+		stx	p2c2b1
+
+		ldx	p2c2b2
+		jsr	pas_da
+		stx	p2c2b2
+
+
+		ldx	p1c1b1		;player2
+		jsr	pas_da2
+		stx	p1c1b1
+
+		ldx	p1c1b2
+		jsr	pas_da2
+		stx	p1c1b2
+
+		ldx	p1c2b1
+		jsr	pas_da2
+		stx	p1c2b1
+
+		ldx	p1c2b2
+		jsr	pas_da2
+		stx	p1c2b2
+		rts
+
+pas_da	equ	*
+		ldy	#dif1
+		jsr	sum
+		ldx	#btmp
+		abx
+		rts
+
+pas_da2	equ	*
+		ldy	#array2
+		jsr	sum
+		ldx	#btmp
+		abx
+		rts
+
+*********************************
+*	    ARREGLOS				*
+*********************************
+
+	ORG	$3000
+array	rmb	elsize*n*n
+array2	rmb	elsize*n*n
+artec	fcc	'abcpdefq'	//p1 es p, p2 es q
+		fcb	0,1,2
+		fcc	't'		//fire o tiro
+		fcb	3,4,5
+		fcc	'r'		//reset
+starta	fcb	0,0,15,0,0,0,0,0,15,15,0,0,0,0,15,15,15,0,0,0,15,0,0,0,15,0,15,0,0,15,0,15,15,15,15,0
+
+*********************************
+*	   VARIABLES				*
+*********************************
+
+		org	$3700
+vars	equ	*
+fil		rmb	1
+col		rmb	1
+error	rmb	1
+cont	rmb	1
+cont2	rmb	1
+colu	rmb	1
+fila	rmb	1
+ferr	rmb	1
+cont3	rmb	1
+alpre	rmb	1
+lfila	rmb	1
+lcolu	rmb	1
+type	rmb	1
+direc	rmb	1
+ldirec	rmb	1
+fila2	rmb	1
+colu2	rmb	1
+nib2	rmb	1
+nib1	rmb	1
+nib2_2	rmb	1
+res1	rmb	1
+rest	rmb	2
+resto	rmb 	1
+dif		rmb	1
+sent	rmb	1
+resp	rmb	1
+lukag	rmb	1
+colu3	rmb	1
+fila3	rmb	1
+especia	rmb	1
+fundo	rmb	1
+count	rmb	1
+pp1		rmb	1
+pp2		rmb	1
+tecpres	rmb	1
+tfil	rmb	1
+tcol	rmb	1
+fla_err	rmb	1
+vplyr	rmb	1
+tply	rmb	1
+fcar	rmb	1
+cantvar	equ	*-vars
+
+p1c1b1	rmb	2
+p1c1b2	rmb	2
+p1c2b1	rmb	2
+p1c2b2	rmb	2
+p2c1b1	rmb	2
+p2c1b2	rmb	2
+p2c2b1	rmb	2
+p2c2b2	rmb	2
+tircar	rmb	2	
+p1carg1	rmb	1		//jugador 1
+p1carg2	rmb	1		//estas variables se utilizan para saber si el cargero ya fue tocado	
+p2carg1	rmb	1		//jugador 2
+p2carg2	rmb	1		//estas variables se utilizan para saber si el cargero ya fue tocado
+player	rmb	1
+
+
+*********************************
+*	constantes					*
+*********************************
+		org	$4500
+inicio	fcc	'    '
+		fcc	'WELCOME TO BATTLESHIPS: THE MOST EXCITING HC11 GAME YET! PRESS P1 TO BEGIN!'
+		fcc	'    '
+		fcb	0
+turno1	fcc	'    '
+		fcc	'PLAYER 1 HAS HIS/HER BATTLESHIP READY TO FIRE!'
+		fcc	'    '
+		fcb	0
+turno2	fcc	'    '
+		fcc	'PLAYER 2 HAS HIS/HER BATTLESHIP READY TO FIRE!'
+		fcc	'    '
+		fcb	0
+win1	fcc	'    '
+		fcc	'PLAYER 1 WINS!    CONGRATULATIONS!    AND REMEMBER, WINNERS DO NOT USE DRUGS!    PRESS RESET TO PLAY AGAIN'
+		fcc	'    '
+		fcb	0
+win2	fcc	'    '
+		fcc	'PLAYER 2 WINS!    CONGRATULATIONS!    AND REMEMBER, WINNERS DO NOT USE DRUGS!    PRESS RESET TO PLAY AGAIN'
+		fcc	'    '
+		fcb	0 	
+hundirs	fcc	'    '
+		fcc	'YOU HAVE DESTROYED AN ENEMY SUBMARINE! WAY TO GO!'
+		fcc	'    '
+		fcb	0
+hundirf	fcc	'    '
+		fcc	'YOU HAVE SUNK AN ENEMY BATTLESHIP! NICE!'
+		fcc	'    '
+		fcb	0
+golpear	fcc	'    '
+		fcc	'YOU HAVE HIT AN ENEMY BATTLESHIP! IT IS STILL MOVING THOUGH'
+		fcc	'    '
+		fcb	0
+fallido	fcc	'    '
+		fcc	'YOU MISSED! TRY AIMING BETTER NEXT TIME'
+		fcc	'    '
+		fcb	0
+er1		fcc	'    '
+		fcc	'INVALID KEY!'
+		fcc	'    '
+		fcb	0
+er2		fcc	'    '
+		fcc	'YOU CANNOT USE UNDO TWO TIMES IN A ROW'
+		fcc	'    '
+		fcb	0
+er3		fcc	'    '
+		fcc	'THAT POSITION IS OUTSIDE THE BATTLEFIELD! PLEASE REMAIN WITHIN THE 6X6 GRID'
+		fcc	'    '
+		fcb	0
+er4		fcc	'    '
+		fcc	'THAT POSITION IS ALREADY OCCUPIED! PLEASE SELECT ANOTHER ONE'
+		fcc	'    '
+		fcb	0
+er5		fcc	'    '
+		fcc	'PRESS RESET TO GO BACK!'
+		fcc	'    '
+		fcb	0
+csub	fcc	'    '
+		fcc	'PLACE YOUR SUBMARINES!'
+		fcc	'    '
+		fcb	0
+cbat	fcc	'    '
+		fcc	'PLACE YOUR BATTLESHIPS!'
+		fcc	'    '
+		fcb	0
+endl	fcc	'    '
+		fcc	'YOUR BATTLESHIPS ARE READY FOR DEPLOYMENT! PRESS P2 TO START POSITIONING PLAYER 2 SHIPS OR IF THEY HAVE ALREADY BEEN PLACED PRESS FIRE TO START THE BATTLE'
+		fcc	'    '
+		fcb	0
+startga	fcc	'    '
+		fcc	'THE BATTLE HAS BEGUN! GOOD LUCK! AND AIM PRECISELY'
+		fcc	'    '
+		fcb	0
+ddisp	fcc	'    '
+		fcc	'YOU HAVE ALREADY FIRED AT THAT POSITION! TRY ANOTHER ONE!'
+		fcc	'    '
+		fcb	0
+
+
+
+*********************************
+*	STACK						*
+*********************************
+		org	$3500
+stack	rmb	20	
+stackp	equ	*-1
+	
+		END

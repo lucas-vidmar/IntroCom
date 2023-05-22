@@ -1,0 +1,218 @@
+***************** 
+*       TP10    * 
+*****************
+
+	p68h11
+	lstexp+
+        lstmac+
+            
+*****************
+*  constantes   *
+*****************
+DDRC    equ $1007       ;data direction register for C
+PIOC    equ $1002       ;for strobe B assertion change
+PORTCL  equ $1005       ;port C latched
+PORTB   equ $1004       ;port B
+DIREC	equ 1		;si es 1 va de derecha a izquierda, 0 va de izquierda a derecha
+
+***************** 
+*     Macros    * 
+*****************
+           
+	macro   %bckp       //ocupa 6 bytes en stack
+        psha
+        pshb
+        pshx
+        pshy
+        endmac
+            
+        macro   %bckp2
+        puly
+        pulx
+        pulb
+        pula
+        endmac
+
+*****************
+*     MAIN      *
+*****************
+
+	org	$2000
+	lds	#stackp		;inicio el stackp
+	%bckp			
+	jsr	initdis		;jmp a la subrutina
+	%bckp2
+	ldx	#inicio		;cargo en x la direccion del comienzo de
+	pshx
+	ldaa 	#DIREC
+	psha
+	%bckp			
+	jsr	master
+	%bckp2
+
+*****************
+*  INITDIS      *
+*****************
+initdis	equ	*
+	psha
+	ldaa #$FF       ;set for output
+	staa DDRC       ;C output
+	ldaa PIOC       ;get current value
+	anda #$FE       ;reset bit 0 to 0
+	staa PIOC       ;send it out
+	pula
+	rts
+
+**************************************
+*Outchar: ACCA: Carácter a enviar
+*		ACCB: Posición (0-3)
+**************************************
+outchar	equ	*
+	stab PORTCL     ;set the position 
+	staa PORTB      ;set the character
+	rts
+*********************************
+*	Subrutina 		*	
+*********************************
+  ORG     $3000
+master  equ     *           --subrutina master, redirige a la subrtina que corresponda
+        tsx
+        ldy     9,x         --1 y 2 direc de retorno, 3 y 4 y, 5 y 6 x, 7 b, 8 a, 9 y 10 y, 11 a
+        ldaa    8,x
+        pshy                --paso el dato a la subrutina que corresponda
+        cmpa    #0          --veo si a (DIREC) es 0 o 1
+        beq     toleft
+        jsr     rtl         --subrutina rtl (right to left)
+        bra     end         --para cuando se vuelva con rts
+toleft  jsr     ltr         --subrutina ltr (left to right)
+end     rts
+
+rtl     equ     *
+        tsx
+        ldab    #1
+        stab    CONT        --se inicializa el contador de veces en 0
+        ldy     2,x         --1 y 2 direccion de retorno, 3 y 4 x
+nxt     ldaa    0,y         --se carga el caracter
+        cmpa    #0
+        beq     final2b      --si es el 0 se termino la cadena
+        ldab    CONT
+        psha                --nos aseguramos de que los registros a usar se mantengan
+        pshb
+        jsr     outchar     --se carga el primer caracter en el led que corresponda
+        pulb
+        pula
+        cmpb    #1
+        beq     cont_1      --salta si el contador es 1, se cargan 2 letras
+        cmpb    #2
+        beq     cont_2      --salta si el contador es 2, se cargan 3 letras
+        ldaa    1,y         --el contador es 3, se cargan 4 letras
+        cmpa    #0
+        beq     final2b      --si es el 0 se termino la cadena
+        ldab    CONT-1
+        psha
+        pshb
+        jsr     outchar     --se manda el segundo caracter a la posicion 2
+        pulb
+        pula
+        ldaa    2,y         --se carga el tercer caracter
+        cmpa    #0
+        beq     final2b      --si es el 0 se termino la cadena
+        ldab    CONT-2
+        psha
+        pshb
+        jsr     outchar     --se manda el tercer caracter a la posicion 1
+        pulb
+        pula
+        ldaa    3,y         --se carga el cuarto caracter
+        cmpa    #0
+final2b beq     final2a      --si es el 0 se termino la cadena
+        ldab    CONT-3
+        psha
+        pshb
+        jsr     outchar     --se manda el cuarto caracter a la posicion 0
+        pulb
+        pula
+      	jsr	time
+        bra     final
+nxt1	bra	nxt
+cont_1  ldaa    1,y         --se carga el segundo caracter
+        cmpa    #0
+        beq     final2a      --si es el 0 se termino la cadena
+        ldab    CONT-1
+        psha
+        pshb
+        jsr     outchar     --se manda el segundo caracter a la posicion 0
+        pulb
+        pula
+        jsr	time
+        bra     final
+cont_2  ldaa    1,y         --se carga el segundo caracter
+        cmpa    #0
+        beq     final2      --si es el 0 se termino la cadena
+        ldab    CONT-2
+        psha
+        pshb
+        jsr     outchar     --se manda el tercer caracter a la posicion 1
+        pulb
+        pula
+        ldaa    2,y         --se carga el tercer caracter
+        cmpa    #0
+final2a beq     final2		--si es el 0 se termino la cadena
+        ldab    CONT-2
+        psha
+        pshb
+        jsr     outchar     --se manda el tercer caracter a la posicion 0
+        pulb
+        pula
+        jsr	time
+final   iny                 --se toman los proximos 4 caracteres
+        iny
+        iny
+        iny
+        ldaa    #0
+        staa    CONT        --se reinicia el contador
+        bra     nxt1
+final2  rts
+
+
+
+
+
+time	equ	*
+	pshx			-backup de x
+	pshy			-backup de y
+	ldx	#41666		-cargar en x 41666 decimal, sera el primer contador
+loop1	ldy	#2		-cargar en y 2 decimal, sera el segundo contador
+loop2	dey			-decrementar el contador
+	bne	loop2		-si y no es 0, vuelve a decrementar y
+	dex			-decrementar x
+	bne	loop1		-si x no es 0, vuelve a empezar el loop
+	ldy	#$0000		-cargo y con el valor $0000
+	ldy	$0000		-cargo y con el valor en la posicion de memoria $1000
+	puly			-recupera y del backup
+	pulx			-recupera x del backup
+	rts			-regresa al main
+
+ltr 	equ	*
+fin 	bra 	fin
+*********************************
+*	STACK			*
+*********************************
+	org	$3500
+stack	rmb	20	
+stackp	equ	*-1
+
+
+*********************************
+*	variables		*
+*********************************
+	org	$4000
+CONT    rmb     1
+
+*********************************
+*	constantes		*
+*********************************
+	org	$4500
+inicio	fcc	'EL PAJARO VUELA MUY ALTO'
+	fcb	$0
+	end

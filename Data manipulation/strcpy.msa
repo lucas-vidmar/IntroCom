@@ -1,0 +1,68 @@
+***************** 
+*  Ejercicio 2  * 
+*****************
+	p68h11
+*****************
+*  constantes   *
+*****************
+MAX		equ	20
+ERROR	equ	01
+RIGTH	equ	00
+*****************
+*     MAIN      *
+*****************
+		org	$2000
+		lds	#stackp	
+		ldx	#inicio
+		ldy	#dest
+		jsr	strcpy
+
+		swi
+
+*********************************
+*	Subrutina 					*	
+*********************************
+		org	$5000
+strcpy	equ	*
+		pshb
+		pshx
+		pshy
+		clra
+		ldaa	#MAX
+loop	ldab	0,x
+		stab	0,y
+		beq	rigth
+		inx
+		iny
+		deca
+		bne	loop
+	
+error	equ	*
+		ldaa	#ERROR
+		bra	fin
+
+rigth	equ	*
+	ldaa	#RIGTH
+
+fin		equ	*
+		puly
+		pulx
+		pulb
+		rts
+*********************************
+*	STACK						*
+*********************************
+		org	$3000
+stack	rmb	20	
+stackp	equ	*-1
+
+*********************************
+*	VARIABLES		*
+*********************************
+		org	$4000
+inicio	fcc	'Probando el error 1 en el prog'
+		fcb	0
+
+		org	$4500
+dest	rmb	MAX
+		END

@@ -1,0 +1,38 @@
+
+	p68h11
+	public	minmax
+	rseg	CODE
+minmax	equ	*
+	pshx			;back up de todos los indices y registros
+	pshy
+	psha
+	pshb
+	tsx			;cargo stack pointer
+max	ldy	11,x		;cargo en y la direccion de origen del arreglo
+	ldab	10,x		;cargo en b la cantidad de elementos a analizar
+loop2	ldaa	0,y		;cargo en a la el valor de la posicion de memoria indicada por el indice y
+loop1	iny			;incremento el indice y
+	decb			;decremento b
+	beq	finmax		;si b=0 significa que ya termino de analizar todos los elementos y termina la busqueda del max
+	cmpa	0,y		;comparo a con la posicion de memoria
+	bgt	loop1		;si a es mayor que la posicion de memoria salta a loop1
+	bra	loop2		;al contrario, salta a loop2 donde se carga en a el valor mas grande
+finmax	ldy	6,x		;cargo en y la posicion en donde debe retornar el valor maximo
+	staa	0,y		;guardo el valor max en la posicion de memoria
+min	ldy	11,x		;cargo en y la direccion de origen del arreglo
+	ldab	10,x		;cargo en b la cantidad de elementos a analizar
+loop4	ldaa	0,y		;cargo en a la el valor de la posicion de memoria indicada por el indice y
+loop3	iny			;incremento el indice y
+	decb			;decremento b
+	beq	finmin		;si b=0 significa que ya termino de analizar todos los elementos y termina la busqueda del min
+	cmpa	0,y		;comparo a con la posicion de memoria
+	blo	loop3		;si a es menor que la posicion de memoria salta a loop3
+	bra	loop4		;al contrario, salta a loop4 donde se carga en a el valor mas chico
+finmin	ldy	8,x		;cargo en y la posicion en donde debe retornar el valor minimo
+	staa	0,y		;guardo el valor min en la posicion de memoria
+	pulb			;recupero todos los indices y registros
+	pula
+	puly
+	pulx
+	rts
+	END

@@ -1,0 +1,913 @@
+
+*****************
+*      TP11     * 
+*****************
+
+        p68h11
+
+
+******* Ports ***************************
+DDRC    equ     $1007           ;data direction register for C
+PIOC    equ     $1002           ;for strobe B assertion change
+PORTCL  equ     $1005           ;port C latched
+PORTB   equ     $1004           ;port B
+PORTC   equ     $1003           ;rows
+******* Cols and Row Ports **************
+ROWS    equ     PORTC           ;outputs
+COLS    equ     PORTCL          ;inputs
+***** Row Masks *************************
+FIL0    equ     00001110b       ;mascaras para manejo de filas
+FIL1    equ     00001101b
+FIL2    equ     00001011b
+FIL3    equ     00000111b
+****** Keyboard Mask ********************
+
+keysize equ     4
+count4  equ     4
+plus    equ     $2B
+minus   equ     $2D
+div     equ     $2F
+multi   equ     $2A
+equal   equ     $3D
+toascii equ     $30
+clear   equ     $40
+mas     equ     1
+menos   equ     2
+produc  equ     3
+cocien  equ     4
+maxct   equ     5
+nummax  equ     10
+max     equ     9999
+min     equ     -999
+min1    equ     999
+post3   equ     3
+post2   equ     2
+E       equ     $45
+
+***************** 
+*     Macros    * 
+*****************
+           
+        macro   %bckp           ;ocupa 6 bytes en stack
+        psha                    ;esta macro hace un backup de todos los registros
+        pshb
+        pshx
+        pshy
+        endmac
+            
+        macro   %rbckp
+        puly                    ;esta macro recupera todos los registros del stack
+        pulx
+        pulb
+        pula
+        endmac
+
+        macro   %gettecla
+        ldab    #\0
+        staa    PORTC
+        ldaa    PORTC
+        anda    #$F0
+        cmpa    #$F0
+        bne     find
+        endmac
+
+        macro   %posi
+        ldd     \0
+        addd    #-1
+        coma
+        comb
+        std     \0
+        endmac
+
+        macro   %nega
+        ldaa    \0
+        ldab    \0+1
+        coma    
+        comb
+        addd    #1
+        std     \0
+        endmac
+        
+        macro   %nieg
+        xgdx
+        coma
+        comb
+        addd    #1
+        xgdx
+        endmac  
+
+
+*****************
+*     MAIN      *
+*****************
+
+        org     $2000
+        lds     #stackp         ;inicio el stackp
+        %bckp                   
+        psha                    ;esta macro hace un backup de todos los registros
+        pshb
+        pshx
+        pshy
+        jsr     initdis         ;jmp a la subrutina para inicializar el display y teclado
+        %rbckp
+        puly                    ;esta macro recupera todos los registros del stack
+        pulx
+        pulb
+        pula
+        jsr     tecla
+        
+
+*********************************
+*       SUBRUTINA               *
+*********************************
+
+*****************************************************
+*        Inicializa display (y teclado)             *
+*****************************************************
+initdis equ     *
+        psha
+        ldaa    #$0F            ;set for input/output
+        staa    DDRC            ;C output
+        ldaa    PIOC            ;get current value
+        anda    #$FE            ;reset bit 0 to 0
+        staa    PIOC            ;send it out
+        pula
+        rts
+
+*****************************************
+*Outchar: ACCA: Carácter a enviar       *
+* ACCB: Posición (0-3)                  *
+*****************************************
+outchar equ     *
+        stab    PORTCL                  ;set the position
+        staa    PORTB                   ;set the character
+        rts
+
+*****************************************************************
+*                        tecla                                  *
+*-esta subrutina hace operaciones con las teclas presionadas    *
+*****************************************************************
+tecla   equ     *       
+        ldy     #arreglo        ;cargo en y el inicio del arreglo
+        ldaa    #post3          ;cargo en A un 3        
+        staa    pos             ;lo guardo en var 'pos'  que va a ser un contador de las posiciones del display
+        ldaa    #2              ;cargo un 2
+        staa    smbcoun         ;lo guardo en var 'smbcoun' que va a ser un conador de cantidad de operaciones
+        ldab    #count4         ;cargo un 4
+        stab    scount          ;lo guardo en var 'scount' que va a ser un contador para los caracteres antes de una operacion
+        ldaa    #maxct          ;cargo un 5
+        staa    counter         ;lo guardo en var 'counter' que va a contar la cant max de caracteres a ingresar
+tecla1  jsr     barrido         ;hace un barrido para conseguir las filas y columnas
+        jsr     getpos          ;busca la pos del numero o caracter presionado
+        ldaa    0,x             ;cargo el valor en A
+        cmpa    #nummax         ;comparo con el 10 
+        bmi     number          ;si es menor, quiere decir que se presiono un numero, salto a 'number'
+        cmpa    #clear          ;comparo para ver si se presiono el clear.
+        bne     crt             ;si no es igual, quiere decir que es una operacion
+        jsr     clrall          ;se borra todo
+        bra     tecla           ;empieza de nuevo
+crt     jsr     symb            ;llama a subrutina 'symb' que identifica el symbolo
+        jsr     time            ;delay
+        bra     tecla1          ;salto a 'tecla1'
+number  staa    0,y             ;guardo el primer numero en la primera pos del arreglo
+        iny                     ;incremento el puntero del arreglo
+        dec     counter         ;decremento 'counter'
+        bne     sigo            ;si no es cero, salto a 'sigo'
+        psha                    ;error1
+        ldaa    #1
+        jsr     error
+        pula
+        jsr     time            ;delay
+        bra     tecla1          ;salto a 'tecla'
+sigo    adda    #toascii        ;convierte el numero a ascii
+        ldab    pos             ;cargo la posicion que deberia ir al display
+        jsr     outchar         ;muestra en el display
+        dec     pos             ;decremento 'pos'
+        dec     scount          ;decremento 'scount'
+        jsr     time            ;delay
+        bra     tecla1          ;salto a 'tecla1'
+
+*************************************************************************
+*                         barrido                                       *
+*-esta subrutina busca las filas y columnas de las teclas presionadas   *
+*-devuelve la fila y columna en las variables 'filas' y 'cols'          *
+*************************************************************************
+barrido equ     *
+        ldaa    #FIL0           ;busca la fila que esta presionada
+        %gettecla       0
+        ldab    #0
+        staa    PORTC
+        ldaa    PORTC
+        anda    #$F0
+        cmpa    #$F0
+        bne     find
+        ldaa    #FIL1
+        %gettecla       1
+        ldab    #1
+        staa    PORTC
+        ldaa    PORTC
+        anda    #$F0
+        cmpa    #$F0
+        bne     find
+        ldaa    #FIL2
+        %gettecla       2
+        ldab    #2
+        staa    PORTC
+        ldaa    PORTC
+        anda    #$F0
+        cmpa    #$F0
+        bne     find
+        ldaa    #FIL3
+        %gettecla       3
+        ldab    #3
+        staa    PORTC
+        ldaa    PORTC
+        anda    #$F0
+        cmpa    #$F0
+        bne     find
+        bra     barrido         ;si no se presiono ninguno, empieza de nuevo
+find    clc                     ;borra el carry
+        stab    filas           ;guardo la fila en var 'filas'
+        ldab    #post3          ;cargo un 3             
+        stab    cols            ;lo guardo en var 'cols'
+        ldab    #count4         ;creo un contador de 4
+kgoing  asla                    ;shift a la izquiera
+        bcc     gotcol          ;si el carry es 0, encontro la col, salta a 'gotcol'
+        dec     cols            ;decremento 'cols'
+        decb                    ;decremento contador
+        bne     kgoing          ;si no es cero,salto a kgoing
+gotcol  rts
+
+
+*********************************************************************************
+*                         getpos                                                *
+*-esta subrutina crea un puntero para ubicar el num o caracter presionado       *
+*********************************************************************************
+
+getpos  equ     *
+        ldx     #table
+        ldaa    filas
+        ldab    #keysize
+        mul
+        abx
+        ldab    cols
+        abx
+        rts
+
+*********************************************************************************
+*                         symb                                                  *
+*-esta subrutina identifica la operacion seleccionada                           *
+*********************************************************************************
+
+
+symb    equ     *
+        cmpa    #equal          ;comparo para ver si se presiono el igual
+        beq     not4            ;si es igual, salto a 'not4'
+        cmpa    #minus          ;comparo si es un menos
+        bne     oper            ;si no es igual, es una operacion, salto a 'oper'
+        ldab    counter         ;comparo el counter con 5
+        cmpb    #maxct
+        bne     oper            ;si no es igual, salto a 'oper'
+        ldab    pos             ;si es igual, pone un menos en el diplay
+        jsr     outchar
+        dec     pos
+        dec     counter
+        dec     scount
+        staa    0,y
+        iny
+        jsr     time
+        rts
+oper    ldab    scount          ;comparo el scount con el 0, si no es igual, error
+        cmpb    #0
+        bne     mal             
+        cmpa    #plus           ;comparo con las operaciones
+        bne     not1            //no es un mas
+        ldab    #mas
+        bra     gotsymb
+not1    cmpa    #minus
+        bne     not2            //no es un menos
+        ldab    #menos
+        bra     gotsymb
+not2    cmpa    #div
+        bne     not3            //no es una division
+        ldab    #cocien
+        bra     gotsymb
+not3    cmpa    #multi
+        bne     not4            //tiene que ser un igual
+        ldab    #produc
+gotsymb stab    flag            ;cargo en var 'flag' valor representante de cada operacion
+        dec     smbcoun         ;decremento smbcount, si no es cero,salto a smbcok
+        bne     smbcok
+mal     psha                    ;error3
+        ldaa    #3
+        jsr     error
+        pula
+        bra     stop
+smbcok  jsr     clean           ;salto a 'clean'
+stop    ldaa    #maxct
+        staa    counter
+        ldab    #count4
+        stab    scount
+        rts
+not4    jsr     handler         ;salto a 'handler'
+finsymb rts
+
+
+*********************************************************************************
+*                         clean                                                 *
+*-esta subrutina borra el display                                               *
+*********************************************************************************
+clean   equ     *
+        ldx     #space          
+        ldaa    0,x
+        ldab    #0
+        jsr     outchar
+        ldaa    1,x
+        ldab    #1
+        jsr     outchar
+        ldaa    2,x
+        ldab    #2
+        jsr     outchar
+        ldaa    3,x
+        ldab    #3
+        jsr     outchar
+        ldab    #0
+        stab    counter
+        ldab    #3
+        stab    pos
+        rts
+*********************************************************************************
+*                         clrall                                                *
+*-esta subrutina borra el display, el arreglo y el flag                         *
+*********************************************************************************
+clrall  equ     *
+        jsr     clean
+        ldab    #4
+        ldx     #0
+        ldy     #arreglo
+lip     stx     0,y
+        iny     
+        iny
+        decb
+        bne     lip
+        clr     flag
+        clr     nn
+        stx     numtot1
+        stx     numtot2
+        stx     rest
+        clr     nega1
+        clr     nega2
+        clr     negatot
+        rts
+*********************************************************************************
+*                         time                                                  *
+*-esta subrutina hace un delay de 0.5 segundos                                  *
+*********************************************************************************
+time    equ     *               ;esta subrutina hace un delay de 0.5 segundos
+        pshx                    -backup de x
+        pshy                    -backup de y
+        ldx     #41666          -cargar en x 41666 decimal, sera el primer contador
+loop1   ldy     #8              -cargar en y 2 decimal, sera el segundo contador
+loop2   dey                     -decrementar el contador
+        bne     loop2           -si y no es 0, vuelve a decrementar y
+        dex                     -decrementar x
+        bne     loop1           -si x no es 0, vuelve a empezar el loop
+        ldy     #$0000          -cargo y con el valor $0000
+        ldy     $0000           -cargo y con el valor en la posicion de memoria $1000
+        puly                    -recupera y del backup
+        pulx                    -recupera x del backup
+        rts                     -regresa al main
+
+*********************************************************************************
+*                        error                                                  *
+*-esta subrutina el error cometido                                              *
+*********************************************************************************
+
+error   equ     *               //esta subrutina recibe por Acca un tipo de error y manada al display un codigo de error
+        %bckp                   //backup de registros
+        psha                    ;esta macro hace un backup de todos los registros
+        pshb
+        pshx
+        pshy
+        psha
+        jsr     clean
+        pula
+        staa    ernum
+        ldab    #post3          //envio la E al display para que se sepa que es un error        
+        ldaa    #E
+        jsr     outchar
+        ldaa    ernum
+        adda    #$30
+        ldab    #post2          //envio el numero de erro para que se sepa
+        jsr     outchar         //especificamente que errores
+        %rbckp
+        puly                    ;esta macro recupera todos los registros del stack
+        pulx
+        pulb
+        pula
+        rts
+
+*********************************************************************************
+*                         tog - together                                        *
+*/esta subrutina agarra los digitos del arreglo y los junta en un solo numero   *
+*/mediante la multiplicacion de cada digito por la centena/decena o correspond  *
+*********************************************************************************
+
+tog     equ     *               //subrutina together, junta el numero
+        %bckp
+        psha                    ;esta macro hace un backup de todos los registros
+        pshb
+        pshx
+        pshy
+        ldy     #numtot1        //guardo el lugar donde se almacena el resultado
+        ldaa    nn              //creo una variable para guardar en numtot1 o 2 dependiend
+        cmpa    #1
+        bne     keepon
+        iny
+        iny
+keepon  ldx     #0
+        ldaa    dig4
+        cmpa    #minus          //si es negativo, no copiar el menos
+        bne     notneg
+        ldaa    #1
+        staa    neg
+        ldaa    #0
+        ldab    #0
+        bra     isneg
+notneg  ldab    #10             //si no es negativo copio el primer digito normalmente
+        mul
+        ldaa    #100
+        mul     
+isneg   std     0,y             //desde aqui la subrutina se comporta igual sin importar
+        ldaa    dig3            //el signo
+        ldab    #100
+        mul
+        addd    0,y
+        std     0,y
+        ldaa    dig2
+        ldab    #10
+        mul
+        addd    0,y
+        std     0,y
+        ldaa    dig1
+        ldab    #1
+        mul
+        addd    0,y
+        std     0,y
+        ldaa    neg
+        cmpa    #1              //utilizo el flag que seteo mas arriba para saber si esneg
+        bne     listo
+        dec     neg             //complemento el numero para simplificar subrutinas sig
+        ldd     0,y
+        coma
+        comb
+        addd    #1
+        std     0,y
+listo   %rbckp
+        puly                    ;esta macro recupera todos los registros del stack
+        pulx
+        pulb
+        pula
+        rts
+
+*********************************************************************************
+*                         handler                                               *
+*/con los flags seteados en subrut. tecla y con los nros juntados en subrut.    *
+*/tog, se redirige a la subrutina correspondiente para realizar la op. pedida   *
+*********************************************************************************
+
+handler equ     *               //cuando se llama esta subrutina, los valores ingresados
+        %bckp                   //ya estan en el display
+        psha                    ;esta macro hace un backup de todos los registros
+        pshb
+        pshx
+        pshy
+        ldaa    #0
+        staa    nn
+        jsr     tsfdig          
+        jsr     tog             //juntamos los numeros
+        inc     nn              //este flag tendra un signifcado distinto la segunda vez
+        jsr     tsfdig          //que se corra bien
+        jsr     tog
+        ldx     numtot1         //se colocan los nros en los registros x e y porque
+        ldy     numtot2         //las subrutinas que siguen asi lo requieren
+        ldaa    flag            //empezamos a evaluar el flag para saber que operacion
+        cmpa    #1              //realizaremos
+        beq     suma
+        cmpa    #2
+        beq     resta
+        cmpa    #3
+        beq     multip
+        jsr     divi
+        bra     finale
+resta   jsr     subs
+        ldx     numtot1
+        ldy     numtot2
+suma    jsr     sum
+        bra     finale
+multip  jsr     mult
+finale  %rbckp
+        puly                    ;esta macro recupera todos los registros del stack
+        pulx
+        pulb
+        pula
+        rts                     //cuando termine la op o halla un error, vuelve a tecla
+
+*********************************************************************************
+*                         tsfdig - transfer digit                               *
+*/se crea esta subrutina con el unico fin de articular entre tecla y tog        *
+*********************************************************************************
+
+tsfdig  equ     *
+        %bckp
+        psha                    ;esta macro hace un backup de todos los registros
+        pshb
+        pshx
+        pshy
+        ldx     #arreglo        //se carga la posicion del arreglo
+        ldaa    nn              //vemos si necesitamos los primeros 4 o ultimos 4 nros
+        cmpa    #1
+        bne     keepon2
+        inx
+        inx
+        inx
+        inx
+keepon2 ldab    #4
+        ldy     #dig4           //se carga la posicion de las variables dig(i)
+lup     ldaa    0,x             //comienza la transferencia de datos
+        staa    0,y
+        inx
+        dey
+        decb
+        bne     lup
+        %rbckp
+        puly                    ;esta macro recupera todos los registros del stack
+        pulx
+        pulb
+        pula
+        rts
+
+*********************************************************************************
+*                               sum-suma y resta                                *
+*********************************************************************************
+
+sum     equ     *
+        %bckp
+        psha                    ;esta macro hace un backup de todos los registros
+        pshb
+        pshx
+        pshy
+        xgdx                    //divido el primer numero en 2 bytes 
+        stab    nib1            //y guardo cada parte en memoria
+        staa    nib2            
+        xgdy                    //repito la operacion con el segundo numero
+        staa    nib2_2
+        ldaa    nib1            //cargo el byte menos significativo del primer numero y lo 
+        aba                     //y lo sumo con el byte menos significativo del segundo
+        bcc     sigo1           //si hay carry sumo uno en el byte mas significativo del 
+        inc     nib2            //primer numero
+sigo1   staa    res1            //guardo el primer resultado en memoria
+        ldaa    nib2            //sumo los bytes mas significativos
+        ldab    nib2_2
+        aba                     //en Acca tengo el byte mas significativo del resultado
+        ldab    res1            //cargo en Accb el byte menos significativo asi tengo en D el 
+        std     rest            //resultado
+        asld                    //analizo si el resultado es positivo o negativo
+        bcs     nega
+        ldx     #max            //me aseguro que el resultado no sea mayor a 9999
+        cpx     rest    
+        bmi     error1
+        bra     spos
+nega    ldx     rest            //me aseguro que el resultado no sea menor a -999
+        cpx     #min
+        bpl     sneg                    
+error1  ldaa    #2              //error2 el resultado exede el display  
+        jsr     error
+        bra     fin
+sneg    ldx     rest
+        jsr     ndis            
+        bra     fin
+spos    ldx     rest
+        jsr     pdis
+fin     %rbckp
+        puly                    ;esta macro recupera todos los registros del stack
+        pulx
+        pulb
+        pula
+        rts
+
+
+*********************************************************************************
+*                               ndis - negative display                         *
+*Esta subrutina pasa un numero negativo por el display                          *
+*********************************************************************************
+
+ndis    equ     *
+        ldaa    #minus          //cargo el signo - en la primera pos del display
+        ldab    #3
+        jsr     outchar
+        %nieg                   //transformo el numero negativo a positivo
+        xgdx
+        coma
+        comb
+        addd    #1
+        xgdx
+        xgdx
+        ldx     #100            //transformo el numero de hexa a decimal div por 100 y 10
+        idiv
+        xgdx
+        tba
+        adda    #toascii
+        ldab    #2
+        jsr     outchar         //paso cada digito por display
+        xgdx
+        ldx     #10
+        idiv
+        xgdx
+        tba
+        adda    #toascii
+        ldab    #1
+        jsr     outchar
+        xgdx
+        tba
+        adda    #toascii
+        ldab    #0
+        jsr     outchar
+        rts
+
+*********************************************************************************
+*                               pdis - positive display                         *
+*Esta subrutina pasa un numero positivo por el display                          *
+*********************************************************************************
+
+pdis    equ     *
+        xgdx
+        ldx     #1000           //convierto el numero de hexa a decimal div por 1000, 100 y 10
+        idiv
+        xgdx
+        tba
+        adda    #toascii
+        ldab    #3
+        jsr     outchar         //paso cada digito por el display
+        xgdx
+        ldx     #100
+        idiv
+        xgdx
+        tba
+        adda    #toascii
+        ldab    #2
+        jsr     outchar
+        xgdx
+        ldx     #10
+        idiv
+        xgdx
+        tba
+        adda    #toascii
+        ldab    #1
+        jsr     outchar
+        xgdx
+        tba
+        adda    #toascii
+        ldab    #0
+        jsr     outchar
+        rts
+
+*********************************************************************************
+*                        mult                                                   *
+*-esta subrutina multipilica dos numeros signados de 2 bytes                    *
+*-recibe en IX el primer numero y en IY el segundo numero                       *
+*********************************************************************************
+mult    equ     *
+        %bckp
+        psha                    ;esta macro hace un backup de todos los registros
+        pshb
+        pshx
+        pshy
+        clr     s1
+        clr     s2
+        stx     N1              ;guardo los numeros en posiciones de memoria
+        stx     N1b             
+        sty     N2
+        xgdx                    
+        rola                    ;me fijo si el numero es negativo o positivo de ser positico sigo
+        bcc     sigo3
+        %posi   N1              ;si es negativo cargo un 1 en s1 y convierto el numero en positivo
+        ldd     N1
+        addd    #-1
+        coma
+        comb
+        std     N1
+        ldx     N1
+        stx     N1b             
+        ldaa    #1
+        staa    s1
+sigo3   xgdy                    ;repito la operacion anterior con el segundo numero
+        rola    
+        bcc     sigo4
+        %posi   N2
+        ldd     N2
+        addd    #-1
+        coma
+        comb
+        std     N2
+        ldaa    #1
+        staa    s2
+sigo4   tst     N2              ;si el segundo numero es 0 mando cero y termino                 
+        bne     sigo5
+        tst     N2+1
+        bne     sigo5
+        ldaa    $0
+        ldab    #post3
+        jsr     outchar
+sigo5   ldy     N2              ;multiplico los dos numeros 
+        dey
+lp      ldd     N1b
+        addd    N1
+        std     N1b
+        dey
+        bne     lp
+        std     solut           ;guardo la solucion
+        ldaa    s1              ;analizo el signo del resultado
+        eora    s2              
+        bne     neg2            
+        ldx     #max            ;me aseguro que el resultado no sea mayor a 9999
+        cpx     solut
+        bmi     er2             ;de ser mayor voy a error
+        ldx     solut
+        jsr     pdis            ;envio el resultado al display
+        bra     fin2
+neg2    ldx     #min1           ;me aseguro que el resultado no sea menor a -999
+        cpx     solut
+        bmi     er2             ;de ser menor voy a error
+        %nega   solut
+        ldaa    solut
+        ldab    solut+1
+        coma    
+        comb
+        addd    #1
+        std     solut
+        ldx     solut           ;envio el resultado al display
+        jsr     ndis    
+        bra     fin2                            
+er2     ldaa    #2              ;error2 el resultado exede el display   
+        jsr     error
+fin2    %rbckp
+        puly                    ;esta macro recupera todos los registros del stack
+        pulx
+        pulb
+        pula
+        rts
+
+*********************************************************************************
+*                               divi- division                                  *
+*********************************************************************************
+
+divi    equ     *
+        jsr     signo           //vemos que signo tiene el resultado
+        cpy     #0              //salimos al error 4 si divide por 0
+        bne     saltov
+        ldaa    #4
+        jsr     error
+        rts
+saltov  ldaa    nega1           //vemos si es necesario complementar el primer numero
+        bne     comp1
+return1 ldaa    nega2           //vemos si es necesario complementar el segundo numero
+        bne     comp2
+        bra     opera
+comp1   xgdx
+        addd    #-1
+        coma
+        comb
+        xgdx
+        bra     return1
+comp2   xgdy
+        addd    #-1
+        coma
+        comb
+        xgdy
+opera   pshx                    //una vez complementados los numeros necesarios se comienza
+        pshy                    //a operar
+        pulx
+        puly
+        xgdy
+        idiv
+        ldaa    negatot
+        bne     negar
+        jsr     pdis
+        rts
+negar   xgdx                    //con el signo del resultado y el resultado, construimos
+        coma                    //el resultado final
+        comb
+        addd    #1
+        xgdx
+        cpx     #min
+        bpl     noterr
+        ldaa    #2
+        jsr     error
+        bra     finx
+noterr  jsr     ndis
+finx    rts
+
+*********************************************************************************
+*                               signo                                           *
+*//esta subrutina detecta que signo poseen los dos numeros y devuelve que signo *
+*//se debera utilizar para una multiplicacion o una division                    *
+*********************************************************************************
+        
+        
+signo   equ     *
+        pshx
+        pshy
+        xgdx
+        rola
+        bcc     nneg1
+        inc     nega1           //consigo el primero signo
+nneg1   xgdy
+        rola
+        bcc     nneg2           //consigo el segundo signo
+        inc     nega2
+nneg2   ldaa    nega1
+        eora    nega2           //con un xor podemos saber que signo lleva el resultado
+        staa    negatot         //guardo el signo del resultado
+        puly
+        pulx
+        rts
+        
+*********************************************************************************
+*                               subs                                            *
+*//sirve para complementar solo el segundo numero para la operacion de resta    *
+*********************************************************************************
+
+subs    equ     *
+        pshy
+        psha
+        pshb
+        ldy     #numtot2
+        ldd     0,y
+        coma
+        comb
+        addd    #1
+        std     0,y
+        pulb
+        pula
+        puly
+        rts
+
+*********************************
+*       ARREGLO                 *
+*********************************
+        org     $3000
+arreglo equ     *
+*********************************
+*       STACK                   *
+*********************************
+        org     $3500
+stack   rmb     20      
+stackp  equ     *-1
+
+*********************************
+*       variables               *
+*********************************
+        org     $3700
+filas   rmb     1
+cols    rmb     1
+counter rmb     1
+pos     rmb     1
+flag    rmb     1
+dig1    rmb     1
+dig2    rmb     1
+dig3    rmb     1
+dig4    rmb     1
+numtot1 rmb     2
+numtot2 rmb     2
+nn      rmb     1
+neg     rmb     1
+nega1   rmb     1
+nega2   rmb     1
+negatot rmb     1
+nib2    rmb     1
+nib1    rmb     1
+nib2_2  rmb     1
+res1    rmb     1
+smbcoun rmb     1
+rest    rmb     2
+scount  rmb     1
+ernum   rmb     1
+N1      rmb     2
+N2      rmb     2
+N1b     rmb     2
+s1      rmb     1
+s2      rmb     1
+solut   rmb     2
+*********************************
+*       constantes              *
+*********************************
+table   equ     *
+        fcb     0,1,2,3,4,5,6,7,8,9
+        fcc     '+-@/*='
+        fcb     0
+false   fcc     'ERROR    '
+        fcb     0
+space   fcc     '    '
+hola    fcc     'HOLA'
+        END

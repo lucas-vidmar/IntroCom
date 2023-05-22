@@ -1,0 +1,551 @@
+        ***************** 
+        *  Ejercicio 1  * 
+        *****************
+
+        ***************** 
+        *    Arreglo    * 
+        *****************
+        
+            org     $4500
+n           equ     6           //numero de elementos
+el_size     equ     1           //tamano de cada elemento
+array       equ     el_size*n
+
+        ***************** 
+        *   Constantes  * 
+        *****************
+        
+            org     $4600
+values      fcb     12          //valores del arreglo
+            fcb     15
+            fcb     14
+            fcb     20
+            fcb     15
+            fcb     45
+
+        ***************** 
+        *   Variables   * 
+        *****************
+            
+            org     $4700
+cont        rmb     1
+
+        ***************** 
+        *     Macros    * 
+        *****************
+            
+            macro   %bckp       //ocupa 6 bytes en stack
+            pusha
+            pushb
+            pushx
+            pushy
+            endmacro
+            
+            macro   %bckp2
+            pula
+            pulb
+            pulx
+            puly
+            endmacro
+            
+        ***************** 
+        *      Main     * 
+        *****************
+            
+            org     $2000
+            lds     #sp
+            ldy     #values     //y como pointer en las constantes a a pasar al arreglo
+            ldab    n           //se inicia contador de veces que se traslada un valor
+            stab    cont
+            ldab    0           //nro de elemento
+nxtnumber   ldaa    0,y         //se carga el valor del arreglo correspondiente
+            psha                //se pasa por stack dicho valor           
+            pshb                //se pasa por stack el nro de elemento
+            %bckp               //back up de acumuladores y pointers
+            jsr     save        //subrutina que toma dos valores por stack
+            %bckp2              //se restaura el backup hecho
+            iny                 //se toma el siguiente elemento
+            incb                //se actualiza el nro de elemento
+            dec     cont        //decrementa el contador
+            bne     nxtnumber   
+end         bra     end
+            
+        *****************       //esta subrutina recibe el valor a transferir y la posicion
+        *   Subrutinas  *       a donde se lo quiere transferir
+        *****************
+        
+            org     $5000
+save        equ     *
+            %bckp
+            tsy                 //se utiliza a y como pointer en el stack
+            ldaa    15,y        //se toma el nro de elemento desde el stack, es decir, accb
+            ldx     #array      //se utiliza a x como pointer en el arreglo
+            ldab    el_size
+            mul                 //se consigue la cantidad de posiciones que se debe mover
+            abx
+            ldaa    16,y        //se toma el valor a transferir
+            staa    0,x         //se transfiere al arreglo el valor
+            %bckp2              //se devuelve el stack al estado anterior a la ejecucion de la subrutina
+            rts
+            
+        ***************** 
+        *     Stack     * 
+        *****************
+        
+            org     $6000
+stack       rmb     30
+sp          equ     *-1
+
+---------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------
+
+        ***************** 
+        * Ejercicio 1-b * 
+        *****************
+
+        ***************** 
+        *    Arreglo    * 
+        *****************
+        
+            org     $4500
+n           equ     6           //numero de elementos
+el_size     equ     2           //tamano de cada elemento
+array       equ     el_size*n
+
+        ***************** 
+        *   Constantes  * 
+        *****************
+        
+            org     $4600
+values      fcb     1200        //valores del arreglo
+            fcb     1235
+            fcb     44694
+            fcb     11920
+            fcb     50915
+            fcb     45
+
+        ***************** 
+        *   Variables   * 
+        *****************
+            
+            org     $4700
+cont        rmb     1
+
+        ***************** 
+        *     Macros    * 
+        *****************
+            
+            macro   %bckp       //ocupa 6 bytes en stack
+            pusha
+            pushb
+            pushx
+            pushy
+            endmacro
+            
+            macro   %bckp2
+            pula
+            pulb
+            pulx
+            puly
+            endmacro
+            
+        ***************** 
+        *      Main     * 
+        *****************
+            
+            org     $2000
+            lds     #sp
+            ldy     #values     //y como pointer en las constantes a a pasar al arreglo
+            ldab    array       //se inicia contador de veces que se traslada un valor
+            stab    cont
+            ldab    0           //nro de elemento
+nxtnumber   ldaa    0,y         //se carga el valor del arreglo correspondiente
+            psha                //se pasa por stack dicho valor           
+            pshb                //se pasa por stack el nro de elemento
+            %bckp               //back up de acumuladores y pointers
+            jsr     save        //subrutina que toma dos valores por stack
+            %bckp2              //se restaura el backup hecho
+            iny                 //se toma el siguiente elemento
+            incb                //se actualiza el nro de elemento
+            dec     cont        //decrementa el contador
+            bne     nxtnumber   
+end         bra     end
+            
+        *****************       //esta subrutina recibe el valor a transferir y la posicion
+        *   Subrutinas  *       a donde se lo quiere transferir
+        *****************
+        
+            org     $5000
+save        equ     *
+            %bckp
+            tsy                 //se utiliza a y como pointer en el stack
+            ldaa    15,y        //se toma el nro de elemento desde el stack, es decir, accb
+            ldx     #array      //se utiliza a x como pointer en el arreglo
+            ldab    el_size
+            mul                 //se consigue la cantidad de posiciones que se debe mover
+            abx
+            ldaa    16,y        //se toma el valor a transferir
+            staa    0,x         //se transfiere al arreglo el valor
+            %bckp2              //se devuelve el stack al estado anterior a la ejecucion de la subrutina
+            rts
+            
+        ***************** 
+        *     Stack     * 
+        *****************
+        
+            org     $6000
+stack       rmb     30
+sp          equ     *-1
+
+---------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------
+
+        ***************** 
+        *  Ejercicio 2  * 
+        *****************
+
+        ***************** 
+        *    Arreglo    * 
+        *****************
+        
+            org     $4500
+n           equ     6           //numero de elementos
+el_size     equ     1           //tamano de cada elemento
+array       equ     el_size*n
+
+        ***************** 
+        *   Constantes  * 
+        *****************
+        
+            org     $4600
+values      fcb     12          //valores del arreglo
+            fcb     15
+            fcb     14
+            fcb     20
+            fcb     15
+            fcb     45
+
+        ***************** 
+        *   Variables   * 
+        *****************
+            
+            org     $4700
+cont        rmb     1
+max         rmb     1
+
+        ***************** 
+        *     Macros    * 
+        *****************
+            
+            macro   %bckp       //ocupa 6 bytes en stack
+            pusha
+            pushb
+            pushx
+            pushy
+            endmacro
+            
+            macro   %bckp2
+            pula
+            pulb
+            pulx
+            puly
+            endmacro
+            
+        ***************** 
+        *      Main     * 
+        *****************
+            
+            org     $2000
+            lds     #sp
+            ldy     #values     //y como pointer en las constantes a a pasar al arreglo
+            ldab    n           //se inicia contador de veces que se traslada un valor
+            stab    cont
+            ldab    0           //nro de elemento
+nxtnumber   ldaa    0,y         //se carga el valor del arreglo correspondiente
+            psha                //se pasa por stack dicho valor           
+            pshb                //se pasa por stack el nro de elemento
+            %bckp               //back up de acumuladores y pointers
+            jsr     save        //subrutina que toma dos valores por stack
+            %bckp2              //se restaura el backup hecho
+            iny                 //se toma el siguiente elemento
+            incb                //se actualiza el nro de elemento
+            dec     cont        //decrementa el contador
+            bne     nxtnumber   
+            %bckp
+            jsr     findmax     //subrutina findmax encuentra el maximo del arreglo anterior
+            %bckp2
+end         bra     end
+            
+        *****************       
+        *   Subrutinas  *       
+        *****************
+        
+            org     $5000
+save        equ     *           //esta subrutina recibe el valor a transferir y la posicion donde ubicarlo
+            %bckp
+            tsy                 //se utiliza a y como pointer en el stack
+            ldaa    15,y        //se toma el nro de elemento desde el stack
+            ldx     #array      //se utiliza a x como pointer en el arreglo
+            ldab    el_size     
+            mul                 //se consigue la cantidad de posiciones que se debe mover
+            abx
+            ldaa    16,y        //se toma el valor a transferir
+            staa    0,x         //se transfiere al arreglo el valor
+            %bckp2              //se devuelve el stack al estado anterior a la ejecucion de la subrutina
+            rts
+            
+findmax     equ     *           //esta subrutina necesita de la previa ejecucion de subrutina save
+            %bckp
+            ldab    n
+            stab    cont
+            ldab    0
+            stab    max
+            ldx     #array      //se usa x como pointer en el arreglo
+restart     ldaa    el_size    
+            mul                 //cantidad de espacios a moverse por elemento
+            abx
+            incb
+            dec     cont
+            beq     foundmax    //si se terminan los numeros, salir del loop
+            ldaa    0,x         //tomar el elemento
+            cmpa    max         //compararlo con el maximo actual
+            bmi     restart     //si acca es mas chico que el maximo, dara negativo y pasara al proximo numero
+            staa    max         //si acca es un maximo, entonces se tomara como maximo para la sig operacion
+            bra     restart
+foundmax    %bckp2
+            rts
+            
+        ***************** 
+        *     Stack     * 
+        *****************
+        
+            org     $6000
+stack       rmb     30
+sp          equ     *-1
+
+---------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------
+
+        ***************** 
+        * Ejercicio 2-b * 
+        *****************
+
+        ***************** 
+        *    Arreglo    * 
+        *****************
+        
+            org     $4500
+n           equ     6           //numero de elementos
+el_size     equ     2           //tamano de cada elemento
+array       equ     el_size*n
+
+        ***************** 
+        *   Constantes  * 
+        *****************
+        
+            org     $4600
+values      fcb     1200        //valores del arreglo
+            fcb     1235
+            fcb     44694
+            fcb     11920
+            fcb     50915
+            fcb     45
+
+        ***************** 
+        *   Variables   * 
+        *****************
+            
+            org     $4700
+cont        rmb     1
+max         rmb     2
+
+        ***************** 
+        *     Macros    * 
+        *****************
+            
+            macro   %bckp       //ocupa 6 bytes en stack
+            pusha
+            pushb
+            pushx
+            pushy
+            endmacro
+            
+            macro   %bckp2
+            pula
+            pulb
+            pulx
+            puly
+            endmacro
+            
+        ***************** 
+        *      Main     * 
+        *****************
+            
+            org     $2000
+            lds     #sp
+            ldy     #values     //y como pointer en las constantes a a pasar al arreglo
+            ldab    array       //se inicia contador de veces que se traslada un valor
+            stab    cont
+            ldab    0           //nro de elemento
+nxtnumber   ldaa    0,y         //se carga el valor del arreglo correspondiente
+            psha                //se pasa por stack dicho valor           
+            pshb                //se pasa por stack el nro de elemento
+            %bckp               //back up de acumuladores y pointers
+            jsr     save        //subrutina que toma dos valores por stack
+            %bckp2              //se restaura el backup hecho
+            iny                 //se toma el siguiente elemento
+            incb                //se actualiza el nro de elemento
+            dec     cont        //decrementa el contador
+            bne     nxtnumber
+            %bckp
+            jsr     findmax2    //subrutina findmax encuentra el maximo del arreglo anterior
+            %bckp2
+end         bra     end
+            
+        *****************       
+        *   Subrutinas  *       
+        *****************
+        
+            org     $5000
+save        equ     *           //esta subrutina recibe el valor a transferir y la posicion donde ubicarlo
+            %bckp
+            tsy                 //se utiliza a y como pointer en el stack
+            ldaa    15,y        //se toma el nro de elemento desde el stack, es decir, accb
+            ldx     #array      //se utiliza a x como pointer en el arreglo
+            ldab    el_size
+            mul                 //se consigue la cantidad de posiciones que se debe mover
+            abx
+            ldaa    16,y        //se toma el valor a transferir
+            staa    0,x         //se transfiere al arreglo el valor
+            %bckp2              //se devuelve el stack al estado anterior a la ejecucion de la subrutina
+            rts
+            
+findmax2    equ     *           //esta subrutina necesita de la previa ejecucion de subrutina save
+            %bckp
+            ldab    n
+            stab    cont
+            ldab    0
+            stab    max
+            ldx     #array      //se usa x como pointer en el arreglo
+restart     ldaa    el_size    
+            mul                 //cantidad de espacios a moverse por elemento
+            abx
+            incb
+            dec     cont
+            beq     foundmax    //si se terminan los numeros, salir del loop
+            ldy     0,x         //tomar el elemento de dos bits
+            cpy     max         //compararlo con el maximo actual
+            bmi     restart     //si y es mas chico que el maximo, dara negativo y pasara al proximo numero
+            sty     max         //si y es un maximo, entonces se tomara como maximo para la sig operacion
+            bra     restart
+foundmax    %bckp2
+            rts
+            
+        ***************** 
+        *     Stack     * 
+        *****************
+        
+            org     $6000
+stack       rmb     30
+sp          equ     *-1
+
+---------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------
+
+        ***************** 
+        *  Ejercicio 3  * 
+        *****************
+
+        ***************** 
+        *    Arreglo    * 
+        *****************
+        
+            org     $4500
+f           equ     4           //numero de filas
+c           equ     3           //numero de columnas
+el_size     equ     2           //tamano de cada elemento
+array       equ     el_size*f*c
+
+        ***************** 
+        *   Constantes  * 
+        *****************
+        
+            org     $4600
+values      fcb     1200        //valores del arreglo
+            fcb     1235
+            fcb     44694
+            fcb     11920
+            fcb     50915
+            fcb     45
+
+        ***************** 
+        *   Variables   *
+        *****************
+            
+            org     $4700
+cont        rmb     1
+fil         rmb     1
+col         rmb     1
+
+        ***************** 
+        *     Macros    * 
+        *****************
+            
+            macro   %bckp       //ocupa 6 bytes en stack
+            pusha
+            pushb
+            pushx
+            pushy
+            endmacro
+            
+            macro   %bckp2
+            pula
+            pulb
+            pulx
+            puly
+            endmacro
+            
+        *****************
+        *      Main     * 
+        *****************
+            
+            org     $2000
+            lds     #sp
+            ldaa    fil
+            ldab    col
+            ldx     #array
+            psha
+            pshb
+            pshx
+            %bckp
+            jsr     get_cell
+            
+        *****************
+        *   Subrutinas  *       
+        *****************
+        
+            org     $5000
+get_cell    equ     *           //esta subrutina recibe el valor a transferir y la posicion donde ubicarlo
+            %bckp
+            tsy                 //se utiliza a y como pointer en el stack
+            jsr     chk_status  //se redirige directamente a la subrutina de checkeo para no modificar stack
+            ldaa    18,x
+            ldab    17,x
+            ldy     15,x
+
+chk_status  equ     *
+            ldaa    18,x
+            ldab    17,x
+            cmpa    #3
+            bmi     minus_3
+minus_3     cmpa    #0
+            bpl     in_range
+            
+            
+        ***************** 
+        *     Stack     * 
+        *****************
+        
+            org     $6000
+stack       rmb     30
+sp          equ     *-1

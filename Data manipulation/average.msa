@@ -1,0 +1,79 @@
+***************** 
+*  Ejercicio 6  * 
+*****************
+        p68h11
+
+*****************
+*     MAIN      *
+*****************
+        org     $2000
+        lds     #stackp         inicializo stack
+        ldx     #valores        cargo IX con la direccion del primer valor de la temperatura                                                                                            i
+        pshx                    
+        des
+        jsr     get_avr
+
+        pula
+        pula
+fin     bra     fin
+
+
+*************************************************************************************************
+*                                               Subrutina                                       *
+* Recibe como parametro la direccion de memoria de una cadena de valores por el registro IX     *       
+* Devuelve en el registro A un promedio de los numeros de la cadena                             *
+*************************************************************************************************
+        org     $5000
+get_avr equ     *
+        pshx            -Backup de los registros
+        pshy
+        psha
+        pshb
+        tsx             -Se establece un frankpointer
+        clrb            -uso el AccB como contador de los elementos en la cadena 
+        ldy     9,x     -cargo el IY con la direc de la cadena 
+loop    ldaa    0,y     -cargo en AccA el primer elemento de la cadena 
+        inca            -le sumo uno al elmento para corregir el error del sensoe
+        incb            -aumento en 1 el contador
+        psha            -al elemento lo llevo al stack  
+        iny             -el IY apunta al siguiente elemento
+        ldaa    0,y
+        coma            - comparo el elemento a ver si es FF  si es termine de pasar la cadena  sino salto al loop
+        bne     loop
+        stab    cant    -guardo el contador en cant
+        stab    cant2   -guardo devuelta el contador en cant2 (para utilizarlo como divisor)
+        tsx
+        ldy     #0      -utilizo a y para poner la suma total de mis valores 
+loop2   ldab    0,x     -cargo en b el primer elemento de la tabla de valores corregidos que se encuentran en el stack
+        aby             -sumo el valor anterior a IY y lo guardo en IY
+        inx             - paso al siguiente elemento corregido en el stack
+        pula            - decremento el stack haciendo un pull de ese valor en AccA
+        dec     cant    - decremento el contador 
+        bne     loop2           
+        xgdy            -cambio lo que hay en el registro IY con lo que hay el el registro AccD, porque AccD es mi numerador 
+        ldx     div     -cargo x con el divisor
+        idiv            -saco el promedio
+        tsy     
+        stx     8,y     -guardo el promedio en el espacio que habia dejado en el stack
+        pulb            -devuelvo el backup
+        pula    
+        puly
+        pulx
+        rts
+
+*********************************
+*       STACK                   *
+*********************************
+        org     $3000
+stack   rmb     50      
+stackp  equ     *-1
+
+*********************************
+*Constantes de prog             *
+*********************************
+        org     $4000
+cant    rmb     1
+div     rmb     1       -dejo un espacio 1 byte con 0 porque el IX carga 2 bytes y el divisor solo 1 byte
+cant2   rmb     1
+valores fcb     $1,$1,$1,$FF
+        END

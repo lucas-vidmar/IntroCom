@@ -1,0 +1,51 @@
+
+*******************
+*  Ejercicio 5-b  *
+*******************
+        p68h11
+*************************************************************
+* MAIN                                                      *
+* el objetivo de este programa es que una luz se mueva de   *
+* led a led de izquierda a derecha y luego en el sentido    *
+* inverso sin dejar rastro                                  *
+*************************************************************
+
+        org     $2000
+        ldaa    #00001000b
+        staa    $1000           -comenzaremos prendiendo la primera led (derecha)
+restart ldab    #3              -contador que indica la cantidad de pos. que se mueve la luz
+loop    jsr     time            -dejamos pasar 0,5 segundos
+        asl     $1000           -movemos la luz a la led proxima a su izquierda
+        decb                    
+        bne     loop            -cuando la luz pase por todas las leds, cambia el sentido
+        ldab    #3              -nuevamente serian 3 las veces que se mover la luz
+loop3   jsr     time            -dejamos pasar 0,5 segundos
+        asr     $1000           -movemos la luz a la led proxima a la derecha
+        decb
+        bne     loop3
+        bra     restart         -reiniciamos el sistema, cambiando el sentido
+
+***********************************
+*    Subrutina                    *    
+***********************************
+        org     $5000
+time    equ     *               -subrutina time, copiada
+        pshx
+        pshy
+        ldx     #41666
+loop1   ldy     #2
+loop2   dey
+        bne     loop2
+        dex
+        bne     loop1
+        ldy     #$0000
+        ldy     $0000
+        puly
+        pulx
+        rts
+***********************************
+*    STACK                        *
+***********************************
+        org     $3000
+stack   rmb     10    
+stackp  equ     *-1
